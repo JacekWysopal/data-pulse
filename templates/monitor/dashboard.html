@@ -1,0 +1,95 @@
+﻿{% extends 'base.html' %}
+{% block title_suffix %} — Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Reguły monitoringu</h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'monitor:rule_create' %}" class="btn btn-outline-primary btn-sm">+ Dodaj regułę</a>
+    <form method="post" action="{% url 'monitor:run_checks' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">▶ Uruchom sprawdzenie</button>
+    </form>
+  </div>
+</div>
+
+{% if last_run %}
+  <p class="text-muted small mb-3">
+    Ostatni przebieg: {{ last_run.started_at|date:"Y-m-d H:i:s" }}
+    — <span class="status-ok">{{ last_run.ok_count }} OK</span>
+    / <span class="status-fail">{{ last_run.fail_count }} FAIL</span>
+    {% if last_run.error_count %}/ <span class="status-error">{{ last_run.error_count }} ERROR</span>{% endif %}
+  </p>
+{% endif %}
+
+{% if rule_status %}
+<div class="table-responsive">
+  <table class="table table-hover bg-white shadow-sm rounded">
+    <thead class="table-light">
+      <tr>
+        <th>Reguła</th>
+        <th>Tabela</th>
+        <th>Warunki</th>
+        <th>Status</th>
+        <th>Zmierzone wartości</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rule_status %}
+      <tr>
+        <td>
+          <a href="{% url 'monitor:rule_history' item.rule.pk %}">{{ item.rule.name }}</a>
+        </td>
+        <td><code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code></td>
+        <td class="small text-muted">
+          {% if item.rule.min_row_count is not None %}
+            min. {{ item.rule.min_row_count }} wierszy<br>
+          {% endif %}
+          {% if item.rule.timestamp_column %}
+            {{ item.rule.timestamp_column }} ≤ {{ item.rule.max_age_hours }}h
+          {% endif %}
+        </td>
+        <td>
+          {% if item.status == 'OK' %}
+            <span class="status-ok">✅ OK</span>
+          {% elif item.status == 'FAIL' %}
+            <span class="status-fail">❌ FAIL</span>
+          {% elif item.status == 'ERROR' %}
+            <span class="status-error">⚠ ERROR</span>
+          {% else %}
+            <span class="status-never">— Nie sprawdzano</span>
+          {% endif %}
+        </td>
+        <td class="small">
+          {% if item.result %}
+            {% if item.result.row_count is not None %}
+              {{ item.result.row_count }} wierszy
+              {% if item.rule.min_row_count is not None %}
+                (próg: {{ item.rule.min_row_count }})
+              {% endif %}<br>
+            {% endif %}
+            {% if item.result.last_record_age_hours is not None %}
+              {{ item.result.last_record_age_hours|floatformat:1 }}h temu
+              (próg: {{ item.rule.max_age_hours }}h)
+            {% endif %}
+            {% if item.result.error_message %}
+              <span class="text-danger">{{ item.result.error_message|truncatechars:60 }}</span>
+            {% endif %}
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn btn-outline-secondary btn-sm">Edytuj</a>
+          <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn btn-outline-danger btn-sm">Usuń</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <div class="alert alert-info">
+    Brak reguł. <a href="{% url 'monitor:rule_create' %}">Dodaj pierwszą regułę</a>.
+  </div>
+{% endif %}
+{% endblock %}
