@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pl" data-theme="dark">
+{% load static %}
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -509,10 +510,7 @@
     <div class="container d-flex align-items-center justify-content-between">
       <a class="dp-brand" href="{% url 'monitor:dashboard' %}">
         <div class="dp-brand-icon">
-          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 11 L5 7 L8 9 L11 4 L14 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="14" cy="6" r="1.5" fill="white"/>
-          </svg>
+          <img src="{% static 'img/logo.png' %}" alt="DataPulse" style="width:18px;height:18px;object-fit:contain">
         </div>
         <span class="dp-brand-name">Data<span>Pulse</span></span>
       </a>

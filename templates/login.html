@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pl">
+{% load static %}
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -223,11 +224,8 @@
 <div class="login-wrap">
 
   <div class="login-logo">
-    <div class="login-logo-icon">
-      <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 15 L7 9 L11 12 L15 5 L19 8" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="19" cy="8" r="2" fill="white"/>
-      </svg>
+    <div class="login-logo-icon" style="background:none;box-shadow:none;padding:0">
+      <img src="{% static 'img/logo.png' %}" alt="DataPulse" style="width:40px;height:40px;object-fit:contain;border-radius:10px">
     </div>
     <div class="login-logo-name">Data<span>Pulse</span></div>
   </div>
