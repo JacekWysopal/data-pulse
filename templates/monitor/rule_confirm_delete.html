@@ -1,22 +1,38 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% block title_suffix %} — Usuń regułę{% endblock %}
 
 {% block content %}
-<div class="mb-3">
-  <a href="{% url 'monitor:dashboard' %}" class="text-muted small">← Dashboard</a>
-  <h1 class="h3 mt-1">Usuń regułę</h1>
+<div class="mb-4 animate-fadeup">
+  <a href="{% url 'monitor:dashboard' %}" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Dashboard
+  </a>
 </div>
 
-<div class="card shadow-sm" style="max-width: 500px;">
-  <div class="card-body">
-    <p>Czy na pewno chcesz usunąć regułę <strong>{{ rule.name }}</strong>?</p>
-    <p class="text-muted small">Tabela: <code>{{ rule.schema_name }}.{{ rule.table_name }}</code></p>
-    <form method="post">
+<div style="max-width:480px" class="animate-fadeup animate-fadeup-1">
+  <div class="dp-card" style="padding:2rem;border-color:rgba(248,113,113,0.2)">
+
+    <!-- Icon -->
+    <div style="width:44px;height:44px;border-radius:12px;background:var(--fail-dim);border:1px solid rgba(248,113,113,0.25);display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M9 2H11C11.5523 2 12 2.44772 12 3V4H16C16.5523 4 17 4.44772 17 5V6H3V5C3 4.44772 3.44772 4 4 4H8V3C8 2.44772 8.44772 2 9 2Z" fill="#f87171"/>
+        <path d="M5 7L5.89443 15.5528C5.95898 16.1464 6.46462 16.6 7.06168 16.6H12.9383C13.5354 16.6 14.041 16.1464 14.1056 15.5528L15 7H5Z" fill="#f87171" fill-opacity="0.3" stroke="#f87171" stroke-width="1.2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <h2 style="font-size:1.15rem;margin-bottom:0.5rem">Usuń regułę?</h2>
+    <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:1.5rem;line-height:1.6">
+      Reguła <strong style="color:var(--text-primary)">{{ rule.name }}</strong>
+      (<code>{{ rule.schema_name }}.{{ rule.table_name }}</code>) oraz cała jej historia zostanie trwale usunięta. Tej operacji nie można cofnąć.
+    </p>
+
+    <form method="post" class="d-flex gap-2">
       {% csrf_token %}
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-danger">Usuń</button>
-        <a href="{% url 'monitor:dashboard' %}" class="btn btn-outline-secondary">Anuluj</a>
-      </div>
+      <button type="submit" class="btn-dp btn-dp-danger">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Tak, usuń
+      </button>
+      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Anuluj</a>
     </form>
   </div>
 </div>

@@ -1,95 +1,361 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% block title_suffix %} — Dashboard{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* ── Metric strip ── */
+  .metric-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    margin-bottom: 1.75rem;
+  }
+
+  .metric-cell {
+    background: var(--bg-card);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.15s;
+  }
+
+  .metric-cell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .metric-cell:hover::before { opacity: 1; }
+  .metric-cell:hover { background: var(--bg-card-hover); }
+
+  .metric-accent {
+    width: 3px;
+    border-radius: 2px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .metric-body { flex: 1; }
+
+  .metric-val {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+  }
+
+  .metric-lbl {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-weight: 600;
+  }
+
+  /* ── Table rule link ── */
+  .rule-link {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .rule-link:hover { color: var(--accent-hover); }
+
+  .rule-link::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    flex-shrink: 0;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+
+  tr:hover .rule-link::before { background: var(--accent-hover); box-shadow: 0 0 6px var(--accent-glow); }
+  tr.row-ok:hover .rule-link::before { background: var(--ok); box-shadow: 0 0 6px var(--ok-glow); }
+  tr.row-fail:hover .rule-link::before { background: var(--fail); box-shadow: 0 0 6px var(--fail-glow); }
+
+  .cond-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 7px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin: 1px 2px 1px 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .meas-ok   { color: var(--ok); }
+  .meas-fail { color: var(--fail); }
+  .meas-err  { color: var(--error); }
+  .meas-mute { color: var(--text-muted); }
+
+  .actions-cell { opacity: 0; transition: opacity 0.15s; }
+  tr:hover .actions-cell { opacity: 1; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.4; }
+  .empty-title { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; }
+  .empty-sub { font-size: 0.82rem; margin-bottom: 1.25rem; }
+
+  /* ── Run bar ── */
+  .run-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1.25rem;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .run-bar-sep { margin: 0 0.25rem; color: var(--text-faint); }
+
+  @media (max-width: 767px) {
+    .metric-strip { grid-template-columns: repeat(2, 1fr); }
+    .actions-cell { opacity: 1; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0">Reguły monitoringu</h1>
-  <div class="d-flex gap-2">
-    <a href="{% url 'monitor:rule_create' %}" class="btn btn-outline-primary btn-sm">+ Dodaj regułę</a>
-    <form method="post" action="{% url 'monitor:run_checks' %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-primary btn-sm">▶ Uruchom sprawdzenie</button>
-    </form>
+
+<!-- ── Metric strip ── -->
+<div class="metric-strip animate-fadeup">
+  {% with ok=0 fail=0 error=0 %}
+  {% for item in rule_status %}
+    {% if item.status == 'OK' %}{% with ok=ok|add:1 %}{% endwith %}{% endif %}
+  {% endfor %}
+  {% endwith %}
+
+  <div class="metric-cell">
+    <div class="metric-accent" style="background:var(--ok)"></div>
+    <div class="metric-body">
+      <div class="metric-val" style="color:var(--ok)">
+        {% with count=0 %}{% for i in rule_status %}{% if i.status == 'OK' %}{% with count=count|add:1 %}{% endwith %}{% endif %}{% endfor %}{{ rule_status|length }}{% endwith %}
+      </div>
+      <div class="metric-lbl">OK</div>
+    </div>
+  </div>
+
+  <div class="metric-cell">
+    <div class="metric-accent" style="background:var(--fail)"></div>
+    <div class="metric-body">
+      <div class="metric-val" style="color:var(--fail)">0</div>
+      <div class="metric-lbl">FAIL</div>
+    </div>
+  </div>
+
+  <div class="metric-cell">
+    <div class="metric-accent" style="background:var(--error)"></div>
+    <div class="metric-body">
+      <div class="metric-val" style="color:var(--error)">0</div>
+      <div class="metric-lbl">ERROR</div>
+    </div>
+  </div>
+
+  <div class="metric-cell">
+    <div class="metric-accent" style="background:var(--border-strong)"></div>
+    <div class="metric-body">
+      <div class="metric-val" style="color:var(--text-secondary)">{{ rule_status|length }}</div>
+      <div class="metric-lbl">Łącznie</div>
+    </div>
   </div>
 </div>
 
-{% if last_run %}
-  <p class="text-muted small mb-3">
-    Ostatni przebieg: {{ last_run.started_at|date:"Y-m-d H:i:s" }}
-    — <span class="status-ok">{{ last_run.ok_count }} OK</span>
-    / <span class="status-fail">{{ last_run.fail_count }} FAIL</span>
-    {% if last_run.error_count %}/ <span class="status-error">{{ last_run.error_count }} ERROR</span>{% endif %}
-  </p>
-{% endif %}
+<!-- ── Main panel ── -->
+<div class="dp-panel animate-fadeup animate-fadeup-1">
 
-{% if rule_status %}
-<div class="table-responsive">
-  <table class="table table-hover bg-white shadow-sm rounded">
-    <thead class="table-light">
-      <tr>
-        <th>Reguła</th>
-        <th>Tabela</th>
-        <th>Warunki</th>
-        <th>Status</th>
-        <th>Zmierzone wartości</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in rule_status %}
-      <tr>
-        <td>
-          <a href="{% url 'monitor:rule_history' item.rule.pk %}">{{ item.rule.name }}</a>
-        </td>
-        <td><code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code></td>
-        <td class="small text-muted">
-          {% if item.rule.min_row_count is not None %}
-            min. {{ item.rule.min_row_count }} wierszy<br>
-          {% endif %}
-          {% if item.rule.timestamp_column %}
-            {{ item.rule.timestamp_column }} ≤ {{ item.rule.max_age_hours }}h
-          {% endif %}
-        </td>
-        <td>
-          {% if item.status == 'OK' %}
-            <span class="status-ok">✅ OK</span>
-          {% elif item.status == 'FAIL' %}
-            <span class="status-fail">❌ FAIL</span>
-          {% elif item.status == 'ERROR' %}
-            <span class="status-error">⚠ ERROR</span>
-          {% else %}
-            <span class="status-never">— Nie sprawdzano</span>
-          {% endif %}
-        </td>
-        <td class="small">
-          {% if item.result %}
-            {% if item.result.row_count is not None %}
-              {{ item.result.row_count }} wierszy
-              {% if item.rule.min_row_count is not None %}
-                (próg: {{ item.rule.min_row_count }})
-              {% endif %}<br>
-            {% endif %}
-            {% if item.result.last_record_age_hours is not None %}
-              {{ item.result.last_record_age_hours|floatformat:1 }}h temu
-              (próg: {{ item.rule.max_age_hours }}h)
-            {% endif %}
-            {% if item.result.error_message %}
-              <span class="text-danger">{{ item.result.error_message|truncatechars:60 }}</span>
-            {% endif %}
-          {% endif %}
-        </td>
-        <td class="text-end">
-          <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn btn-outline-secondary btn-sm">Edytuj</a>
-          <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn btn-outline-danger btn-sm">Usuń</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-  <div class="alert alert-info">
-    Brak reguł. <a href="{% url 'monitor:rule_create' %}">Dodaj pierwszą regułę</a>.
+  <!-- Panel header -->
+  <div class="dp-panel-header">
+    <span class="dp-panel-title">Reguły monitoringu</span>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-ghost btn-dp-sm">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Dodaj regułę
+      </a>
+      <form method="post" action="{% url 'monitor:run_checks' %}" data-run-form>
+        {% csrf_token %}
+        <button type="submit" class="btn-dp btn-dp-primary btn-dp-sm" data-run-btn>
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1.5l7 4-7 4V1.5z" fill="currentColor"/></svg>
+          Uruchom sprawdzenie
+        </button>
+      </form>
+    </div>
   </div>
-{% endif %}
+
+  <!-- Run info bar -->
+  {% if last_run %}
+  <div class="run-bar">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+    Ostatni przebieg:
+    <strong style="color:var(--text-secondary)">{{ last_run.started_at|date:"Y-m-d H:i:s" }}</strong>
+    <span class="run-bar-sep">·</span>
+    <span style="color:var(--ok)">{{ last_run.ok_count }} OK</span>
+    {% if last_run.fail_count %}
+    <span class="run-bar-sep">·</span>
+    <span style="color:var(--fail)">{{ last_run.fail_count }} FAIL</span>
+    {% endif %}
+    {% if last_run.error_count %}
+    <span class="run-bar-sep">·</span>
+    <span style="color:var(--error)">{{ last_run.error_count }} ERROR</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Table or empty -->
+  {% if rule_status %}
+  <div style="overflow-x:auto">
+    <table class="dp-table">
+      <thead>
+        <tr>
+          <th>Reguła</th>
+          <th>Tabela</th>
+          <th>Warunki</th>
+          <th>Status</th>
+          <th>Zmierzone wartości</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in rule_status %}
+        <tr class="{% if item.status == 'OK' %}row-ok{% elif item.status == 'FAIL' %}row-fail{% elif item.status == 'ERROR' %}row-error{% endif %}">
+
+          <td>
+            <a href="{% url 'monitor:rule_history' item.rule.pk %}" class="rule-link">
+              {{ item.rule.name }}
+            </a>
+          </td>
+
+          <td>
+            <code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code>
+          </td>
+
+          <td>
+            {% if item.rule.min_row_count is not None %}
+              <span class="cond-pill">≥ {{ item.rule.min_row_count }} rows</span>
+            {% endif %}
+            {% if item.rule.timestamp_column %}
+              <span class="cond-pill">{{ item.rule.timestamp_column }} ≤ {{ item.rule.max_age_hours }}h</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if item.status == 'OK' %}
+              <span class="dp-badge dp-badge-ok">
+                <span class="dp-badge-dot"></span>OK
+              </span>
+            {% elif item.status == 'FAIL' %}
+              <span class="dp-badge dp-badge-fail">
+                <span class="dp-badge-dot"></span>FAIL
+              </span>
+            {% elif item.status == 'ERROR' %}
+              <span class="dp-badge dp-badge-error">
+                <span class="dp-badge-dot"></span>ERROR
+              </span>
+            {% else %}
+              <span class="dp-badge dp-badge-never">
+                <span class="dp-badge-dot"></span>Brak danych
+              </span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if item.result %}
+              <div class="d-flex flex-column gap-1">
+                {% if item.result.row_count is not None %}
+                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}" style="font-size:0.8rem;font-variant-numeric:tabular-nums">
+                    {{ item.result.row_count }} wierszy
+                    {% if item.rule.min_row_count is not None %}
+                      <span style="color:var(--text-muted)">(próg: {{ item.rule.min_row_count }})</span>
+                    {% endif %}
+                  </span>
+                {% endif %}
+                {% if item.result.last_record_age_hours is not None %}
+                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}" style="font-size:0.8rem;font-variant-numeric:tabular-nums">
+                    {{ item.result.last_record_age_hours|floatformat:1 }}h temu
+                    <span style="color:var(--text-muted)">(próg: {{ item.rule.max_age_hours }}h)</span>
+                  </span>
+                {% endif %}
+                {% if item.result.error_message %}
+                  <span class="meas-err" style="font-size:0.75rem">{{ item.result.error_message|truncatechars:55 }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="meas-mute" style="font-size:0.8rem">—</span>
+            {% endif %}
+          </td>
+
+          <td class="actions-cell">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn-dp btn-dp-ghost btn-dp-xs">Edytuj</a>
+              <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn-dp btn-dp-danger btn-dp-xs">Usuń</a>
+            </div>
+          </td>
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">◈</div>
+    <div class="empty-title">Brak reguł monitoringu</div>
+    <div class="empty-sub">Dodaj pierwszą regułę, aby zacząć monitorować tabele PostgreSQL.</div>
+    <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-primary">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Dodaj pierwszą regułę
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Real-time metric counters from table state
+  const rows = document.querySelectorAll('.dp-table tbody tr');
+  let ok = 0, fail = 0, error = 0;
+  rows.forEach(r => {
+    if (r.classList.contains('row-ok')) ok++;
+    else if (r.classList.contains('row-fail')) fail++;
+    else if (r.classList.contains('row-error')) error++;
+  });
+  const total = rows.length;
+  const vals = document.querySelectorAll('.metric-val');
+  if (vals.length >= 4) {
+    vals[0].textContent = ok;
+    vals[1].textContent = fail;
+    vals[2].textContent = error;
+    vals[3].textContent = total;
+  }
+</script>
 {% endblock %}

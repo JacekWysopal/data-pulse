@@ -1,35 +1,144 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% block title_suffix %} — {{ action }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .form-card {
+    max-width: 560px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .form-section-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .optional-tag {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .field-error {
+    color: var(--fail);
+    font-size: 0.75rem;
+    margin-top: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="mb-3">
-  <a href="{% url 'monitor:dashboard' %}" class="text-muted small">← Dashboard</a>
-  <h1 class="h3 mt-1">{{ action }}</h1>
+<div class="mb-4 animate-fadeup">
+  <a href="{% url 'monitor:dashboard' %}" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Dashboard
+  </a>
+  <h1 style="font-size:1.4rem;margin-top:0.5rem;margin-bottom:0">{{ action }}</h1>
 </div>
 
-<div class="card shadow-sm" style="max-width: 600px;">
-  <div class="card-body">
-    <form method="post">
-      {% csrf_token %}
-      {% if form.non_field_errors %}
-        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
-      {% endif %}
-      {% for field in form %}
-        <div class="mb-3">
-          <label for="{{ field.id_for_label }}" class="form-label fw-semibold">
-            {{ field.label }}
-            {% if not field.field.required %}<span class="text-muted fw-normal">(opcjonalne)</span>{% endif %}
-          </label>
-          {{ field }}
-          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-          {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-        </div>
-      {% endfor %}
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Zapisz</button>
-        <a href="{% url 'monitor:dashboard' %}" class="btn btn-outline-secondary">Anuluj</a>
+<div class="form-card animate-fadeup animate-fadeup-1">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="dp-alert dp-alert-danger mb-3">
+        ✗ {{ form.non_field_errors }}
       </div>
-    </form>
-  </div>
+    {% endif %}
+
+    <div class="form-section-label">Identyfikacja reguły</div>
+
+    <!-- Name -->
+    <div class="mb-4">
+      <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+      {{ form.name }}
+      {% if form.name.errors %}
+        <div class="field-error">✗ {{ form.name.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Schema + Table in grid -->
+    <div class="row g-3 mb-4">
+      <div class="col-6">
+        <label for="{{ form.schema_name.id_for_label }}" class="form-label">{{ form.schema_name.label }}</label>
+        {{ form.schema_name }}
+        {% if form.schema_name.errors %}
+          <div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+      <div class="col-6">
+        <label for="{{ form.table_name.id_for_label }}" class="form-label">{{ form.table_name.label }}</label>
+        {{ form.table_name }}
+        {% if form.table_name.errors %}
+          <div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-section-label">Warunki monitoringu</div>
+
+    <!-- Volume -->
+    <div class="mb-4">
+      <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
+        {{ form.min_row_count.label }}
+        <span class="optional-tag">opcjonalne</span>
+      </label>
+      {{ form.min_row_count }}
+      {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
+      {% if form.min_row_count.errors %}
+        <div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Freshness: col + max_age in grid -->
+    <div class="row g-3 mb-4">
+      <div class="col-7">
+        <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
+          {{ form.timestamp_column.label }}
+          <span class="optional-tag">opcjonalne</span>
+        </label>
+        {{ form.timestamp_column }}
+        {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
+        {% if form.timestamp_column.errors %}
+          <div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+      <div class="col-5">
+        <label for="{{ form.max_age_hours.id_for_label }}" class="form-label">{{ form.max_age_hours.label }}</label>
+        {{ form.max_age_hours }}
+        {% if form.max_age_hours.errors %}
+          <div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
+      <button type="submit" class="btn-dp btn-dp-primary">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Zapisz regułę
+      </button>
+      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Anuluj</a>
+    </div>
+  </form>
 </div>
 {% endblock %}
