@@ -2,7 +2,7 @@ services:
   - type: web
     name: data-pulse
     runtime: python
-    buildCommand: "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py seed_demo && python manage.py collectstatic --noinput"
     startCommand: "gunicorn data_pulse.wsgi:application"
     releaseCommand: "python manage.py migrate"
     envVars:

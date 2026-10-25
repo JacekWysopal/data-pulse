@@ -521,6 +521,14 @@
           <span class="dp-live-dot"></span>
           Live
         </span>
+        {% if user.is_authenticated %}
+        <form method="post" action="{% url 'logout' %}" style="margin:0">
+          {% csrf_token %}
+          <button type="submit" style="background:transparent;border:1px solid var(--border-strong);color:var(--text-muted);font-size:0.72rem;font-weight:500;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.borderColor='var(--border-focus)';this.style.color='var(--text-secondary)'" onmouseout="this.style.borderColor='var(--border-strong)';this.style.color='var(--text-muted)'">
+            {{ user.username }} · Wyloguj
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
   </nav>

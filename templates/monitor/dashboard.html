@@ -3,194 +3,258 @@
 
 {% block extra_head %}
 <style>
-  /* ── Metric strip ── */
-  .metric-strip {
+  /* ── KPI Strip ── */
+  .kpi-strip {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
+    gap: 12px;
     margin-bottom: 1.75rem;
   }
 
-  .metric-cell {
+  .kpi-card {
     background: var(--bg-card);
-    padding: 1.25rem 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 1.5rem 1.75rem;
     position: relative;
     overflow: hidden;
-    transition: background 0.15s;
+    transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+    cursor: default;
   }
 
-  .metric-cell::before {
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .kpi-card::after {
     content: '';
     position: absolute;
-    inset: 0;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
     opacity: 0;
     transition: opacity 0.2s;
   }
 
-  .metric-cell:hover::before { opacity: 1; }
-  .metric-cell:hover { background: var(--bg-card-hover); }
+  .kpi-card:hover::after { opacity: 1; }
 
-  .metric-accent {
-    width: 3px;
-    border-radius: 2px;
-    height: 40px;
-    flex-shrink: 0;
+  .kpi-card-ok    { border-color: rgba(52,211,153,0.15); }
+  .kpi-card-ok::after { background: linear-gradient(90deg, transparent, var(--ok), transparent); }
+  .kpi-card-ok:hover  { border-color: rgba(52,211,153,0.35); box-shadow: 0 8px 32px rgba(52,211,153,0.08); }
+
+  .kpi-card-fail  { border-color: rgba(248,113,113,0.15); }
+  .kpi-card-fail::after { background: linear-gradient(90deg, transparent, var(--fail), transparent); }
+  .kpi-card-fail:hover  { border-color: rgba(248,113,113,0.35); box-shadow: 0 8px 32px rgba(248,113,113,0.08); }
+
+  .kpi-card-error { border-color: rgba(251,191,36,0.15); }
+  .kpi-card-error::after { background: linear-gradient(90deg, transparent, var(--error), transparent); }
+  .kpi-card-error:hover  { border-color: rgba(251,191,36,0.35); box-shadow: 0 8px 32px rgba(251,191,36,0.08); }
+
+  .kpi-card-total { border-color: rgba(99,102,241,0.15); }
+  .kpi-card-total::after { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+  .kpi-card-total:hover  { border-color: rgba(99,102,241,0.35); box-shadow: 0 8px 32px rgba(99,102,241,0.08); }
+
+  .kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
   }
 
-  .metric-body { flex: 1; }
+  .kpi-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+  }
 
-  .metric-val {
-    font-size: 2rem;
-    font-weight: 800;
+  .kpi-number {
+    font-size: 2.75rem;
+    font-weight: 900;
     line-height: 1;
+    letter-spacing: -2px;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -1px;
   }
 
-  .metric-lbl {
-    font-size: 0.68rem;
+  .kpi-label {
+    font-size: 0.72rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.1em;
     color: var(--text-muted);
     margin-top: 4px;
-    font-weight: 600;
   }
 
-  /* ── Table rule link ── */
+  .kpi-bar-bg {
+    height: 3px;
+    background: var(--bg-elevated);
+    border-radius: 2px;
+    margin-top: 1rem;
+    overflow: hidden;
+  }
+
+  .kpi-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Table ── */
   .rule-link {
     font-weight: 600;
     font-size: 0.88rem;
     color: var(--text-primary);
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
+    text-decoration: none;
   }
 
-  .rule-link:hover { color: var(--accent-hover); }
-
-  .rule-link::before {
-    content: '';
-    width: 6px;
-    height: 6px;
+  .rule-link-dot {
+    width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--text-faint);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
     flex-shrink: 0;
-    transition: background 0.15s, box-shadow 0.15s;
+    transition: all 0.15s;
   }
 
-  tr:hover .rule-link::before { background: var(--accent-hover); box-shadow: 0 0 6px var(--accent-glow); }
-  tr.row-ok:hover .rule-link::before { background: var(--ok); box-shadow: 0 0 6px var(--ok-glow); }
-  tr.row-fail:hover .rule-link::before { background: var(--fail); box-shadow: 0 0 6px var(--fail-glow); }
+  tr:hover .rule-link { color: var(--accent-hover); }
+  tr.row-ok:hover .rule-link-dot    { background: var(--ok);    border-color: var(--ok);    box-shadow: 0 0 8px var(--ok-glow); }
+  tr.row-fail:hover .rule-link-dot  { background: var(--fail);  border-color: var(--fail);  box-shadow: 0 0 8px var(--fail-glow); }
+  tr.row-error:hover .rule-link-dot { background: var(--error); border-color: var(--error); }
+  tr:hover .rule-link-dot           { background: var(--accent); border-color: var(--accent); }
 
   .cond-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    display: inline-flex; align-items: center; gap: 4px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: 5px;
-    padding: 1px 7px;
-    font-size: 0.72rem;
+    padding: 2px 8px;
+    font-size: 0.71rem;
     color: var(--text-secondary);
-    margin: 1px 2px 1px 0;
     font-family: 'JetBrains Mono', monospace;
+    margin: 1px 2px 1px 0;
   }
 
-  .meas-ok   { color: var(--ok); }
-  .meas-fail { color: var(--fail); }
-  .meas-err  { color: var(--error); }
-  .meas-mute { color: var(--text-muted); }
+  .meas-ok   { color: var(--ok); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+  .meas-fail { color: var(--fail); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+  .meas-err  { color: var(--error); font-size: 0.75rem; }
+  .meas-mute { color: var(--text-muted); font-size: 0.82rem; }
 
   .actions-cell { opacity: 0; transition: opacity 0.15s; }
   tr:hover .actions-cell { opacity: 1; }
 
-  /* ── Empty state ── */
-  .empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: var(--text-muted);
-  }
-  .empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.4; }
-  .empty-title { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; }
-  .empty-sub { font-size: 0.82rem; margin-bottom: 1.25rem; }
-
-  /* ── Run bar ── */
   .run-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.625rem 1.25rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.6rem 1.25rem;
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
   }
 
-  .run-bar-sep { margin: 0 0.25rem; color: var(--text-faint); }
+  .empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    color: var(--text-muted);
+  }
+
+  .empty-icon {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    margin: 0 auto 1rem;
+    opacity: 0.5;
+  }
 
   @media (max-width: 767px) {
-    .metric-strip { grid-template-columns: repeat(2, 1fr); }
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
     .actions-cell { opacity: 1; }
+    .kpi-number { font-size: 2.25rem; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- ── Metric strip ── -->
-<div class="metric-strip animate-fadeup">
-  {% with ok=0 fail=0 error=0 %}
-  {% for item in rule_status %}
-    {% if item.status == 'OK' %}{% with ok=ok|add:1 %}{% endwith %}{% endif %}
-  {% endfor %}
-  {% endwith %}
+<!-- ── KPI Strip ── -->
+<div class="kpi-strip">
 
-  <div class="metric-cell">
-    <div class="metric-accent" style="background:var(--ok)"></div>
-    <div class="metric-body">
-      <div class="metric-val" style="color:var(--ok)">
-        {% with count=0 %}{% for i in rule_status %}{% if i.status == 'OK' %}{% with count=count|add:1 %}{% endwith %}{% endif %}{% endfor %}{{ rule_status|length }}{% endwith %}
+  <div class="kpi-card kpi-card-ok animate-fadeup animate-fadeup-1">
+    <div class="kpi-top">
+      <div>
+        <div class="kpi-number" style="color:var(--ok)">{{ ok_count }}</div>
+        <div class="kpi-label">OK</div>
       </div>
-      <div class="metric-lbl">OK</div>
+      <div class="kpi-icon" style="background:var(--ok-dim)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 9l4 4 8-8" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    {% if total_count %}
+    <div class="kpi-bar-bg">
+      <div class="kpi-bar-fill" style="width:{% widthratio ok_count total_count 100 %}%;background:var(--ok)"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="kpi-card kpi-card-fail animate-fadeup animate-fadeup-2">
+    <div class="kpi-top">
+      <div>
+        <div class="kpi-number" style="color:var(--fail)">{{ fail_count }}</div>
+        <div class="kpi-label">FAIL</div>
+      </div>
+      <div class="kpi-icon" style="background:var(--fail-dim)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="#f87171" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    {% if total_count %}
+    <div class="kpi-bar-bg">
+      <div class="kpi-bar-fill" style="width:{% widthratio fail_count total_count 100 %}%;background:var(--fail)"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="kpi-card kpi-card-error animate-fadeup animate-fadeup-3">
+    <div class="kpi-top">
+      <div>
+        <div class="kpi-number" style="color:var(--error)">{{ error_count }}</div>
+        <div class="kpi-label">ERROR</div>
+      </div>
+      <div class="kpi-icon" style="background:var(--error-dim)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="#fbbf24" stroke-width="1.8"/><path d="M9 5.5v4M9 11.5v1" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    {% if total_count %}
+    <div class="kpi-bar-bg">
+      <div class="kpi-bar-fill" style="width:{% widthratio error_count total_count 100 %}%;background:var(--error)"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="kpi-card kpi-card-total animate-fadeup animate-fadeup-4">
+    <div class="kpi-top">
+      <div>
+        <div class="kpi-number" style="color:var(--text-secondary)">{{ total_count }}</div>
+        <div class="kpi-label">Łącznie reguł</div>
+      </div>
+      <div class="kpi-icon" style="background:var(--accent-dim)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="2" rx="1" fill="#818cf8"/><rect x="2" y="8" width="14" height="2" rx="1" fill="#818cf8" opacity=".6"/><rect x="2" y="12" width="9" height="2" rx="1" fill="#818cf8" opacity=".3"/></svg>
+      </div>
+    </div>
+    <div class="kpi-bar-bg">
+      <div class="kpi-bar-fill" style="width:{% if total_count %}{% widthratio ok_count total_count 100 %}{% else %}0{% endif %}%;background:linear-gradient(90deg,var(--ok),var(--accent))"></div>
     </div>
   </div>
 
-  <div class="metric-cell">
-    <div class="metric-accent" style="background:var(--fail)"></div>
-    <div class="metric-body">
-      <div class="metric-val" style="color:var(--fail)">0</div>
-      <div class="metric-lbl">FAIL</div>
-    </div>
-  </div>
-
-  <div class="metric-cell">
-    <div class="metric-accent" style="background:var(--error)"></div>
-    <div class="metric-body">
-      <div class="metric-val" style="color:var(--error)">0</div>
-      <div class="metric-lbl">ERROR</div>
-    </div>
-  </div>
-
-  <div class="metric-cell">
-    <div class="metric-accent" style="background:var(--border-strong)"></div>
-    <div class="metric-body">
-      <div class="metric-val" style="color:var(--text-secondary)">{{ rule_status|length }}</div>
-      <div class="metric-lbl">Łącznie</div>
-    </div>
-  </div>
 </div>
 
-<!-- ── Main panel ── -->
-<div class="dp-panel animate-fadeup animate-fadeup-1">
+<!-- ── Main Panel ── -->
+<div class="dp-panel animate-fadeup animate-fadeup-4">
 
-  <!-- Panel header -->
   <div class="dp-panel-header">
     <span class="dp-panel-title">Reguły monitoringu</span>
     <div class="d-flex align-items-center gap-2">
@@ -208,26 +272,18 @@
     </div>
   </div>
 
-  <!-- Run info bar -->
   {% if last_run %}
   <div class="run-bar">
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
     Ostatni przebieg:
     <strong style="color:var(--text-secondary)">{{ last_run.started_at|date:"Y-m-d H:i:s" }}</strong>
-    <span class="run-bar-sep">·</span>
+    <span style="color:var(--text-faint)">·</span>
     <span style="color:var(--ok)">{{ last_run.ok_count }} OK</span>
-    {% if last_run.fail_count %}
-    <span class="run-bar-sep">·</span>
-    <span style="color:var(--fail)">{{ last_run.fail_count }} FAIL</span>
-    {% endif %}
-    {% if last_run.error_count %}
-    <span class="run-bar-sep">·</span>
-    <span style="color:var(--error)">{{ last_run.error_count }} ERROR</span>
-    {% endif %}
+    {% if last_run.fail_count %}<span style="color:var(--text-faint)">·</span><span style="color:var(--fail)">{{ last_run.fail_count }} FAIL</span>{% endif %}
+    {% if last_run.error_count %}<span style="color:var(--text-faint)">·</span><span style="color:var(--error)">{{ last_run.error_count }} ERROR</span>{% endif %}
   </div>
   {% endif %}
 
-  <!-- Table or empty -->
   {% if rule_status %}
   <div style="overflow-x:auto">
     <table class="dp-table">
@@ -247,13 +303,12 @@
 
           <td>
             <a href="{% url 'monitor:rule_history' item.rule.pk %}" class="rule-link">
+              <span class="rule-link-dot"></span>
               {{ item.rule.name }}
             </a>
           </td>
 
-          <td>
-            <code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code>
-          </td>
+          <td><code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code></td>
 
           <td>
             {% if item.rule.min_row_count is not None %}
@@ -266,52 +321,40 @@
 
           <td>
             {% if item.status == 'OK' %}
-              <span class="dp-badge dp-badge-ok">
-                <span class="dp-badge-dot"></span>OK
-              </span>
+              <span class="dp-badge dp-badge-ok"><span class="dp-badge-dot"></span>OK</span>
             {% elif item.status == 'FAIL' %}
-              <span class="dp-badge dp-badge-fail">
-                <span class="dp-badge-dot"></span>FAIL
-              </span>
+              <span class="dp-badge dp-badge-fail"><span class="dp-badge-dot"></span>FAIL</span>
             {% elif item.status == 'ERROR' %}
-              <span class="dp-badge dp-badge-error">
-                <span class="dp-badge-dot"></span>ERROR
-              </span>
+              <span class="dp-badge dp-badge-error"><span class="dp-badge-dot"></span>ERROR</span>
             {% else %}
-              <span class="dp-badge dp-badge-never">
-                <span class="dp-badge-dot"></span>Brak danych
-              </span>
+              <span class="dp-badge dp-badge-never"><span class="dp-badge-dot"></span>Brak danych</span>
             {% endif %}
           </td>
 
           <td>
             {% if item.result %}
-              <div class="d-flex flex-column gap-1">
+              <div style="display:flex;flex-direction:column;gap:3px">
                 {% if item.result.row_count is not None %}
-                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}" style="font-size:0.8rem;font-variant-numeric:tabular-nums">
-                    {{ item.result.row_count }} wierszy
-                    {% if item.rule.min_row_count is not None %}
-                      <span style="color:var(--text-muted)">(próg: {{ item.rule.min_row_count }})</span>
-                    {% endif %}
+                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}">
+                    {{ item.result.row_count }} wierszy{% if item.rule.min_row_count is not None %} <span style="color:var(--text-muted)">(próg: {{ item.rule.min_row_count }})</span>{% endif %}
                   </span>
                 {% endif %}
                 {% if item.result.last_record_age_hours is not None %}
-                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}" style="font-size:0.8rem;font-variant-numeric:tabular-nums">
-                    {{ item.result.last_record_age_hours|floatformat:1 }}h temu
-                    <span style="color:var(--text-muted)">(próg: {{ item.rule.max_age_hours }}h)</span>
+                  <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}">
+                    {{ item.result.last_record_age_hours|floatformat:1 }}h temu {% if item.rule.max_age_hours %}<span style="color:var(--text-muted)">(próg: {{ item.rule.max_age_hours }}h)</span>{% endif %}
                   </span>
                 {% endif %}
                 {% if item.result.error_message %}
-                  <span class="meas-err" style="font-size:0.75rem">{{ item.result.error_message|truncatechars:55 }}</span>
+                  <span class="meas-err">{{ item.result.error_message|truncatechars:55 }}</span>
                 {% endif %}
               </div>
             {% else %}
-              <span class="meas-mute" style="font-size:0.8rem">—</span>
+              <span class="meas-mute">—</span>
             {% endif %}
           </td>
 
           <td class="actions-cell">
-            <div class="d-flex gap-1 justify-content-end">
+            <div style="display:flex;gap:4px;justify-content:flex-end">
               <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn-dp btn-dp-ghost btn-dp-xs">Edytuj</a>
               <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn-dp btn-dp-danger btn-dp-xs">Usuń</a>
             </div>
@@ -326,8 +369,8 @@
   {% else %}
   <div class="empty-state">
     <div class="empty-icon">◈</div>
-    <div class="empty-title">Brak reguł monitoringu</div>
-    <div class="empty-sub">Dodaj pierwszą regułę, aby zacząć monitorować tabele PostgreSQL.</div>
+    <div style="font-size:0.95rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.4rem">Brak reguł monitoringu</div>
+    <div style="font-size:0.8rem;margin-bottom:1.5rem">Dodaj pierwszą regułę, aby zacząć monitorować tabele PostgreSQL.</div>
     <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-primary">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       Dodaj pierwszą regułę
@@ -337,25 +380,4 @@
 
 </div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-  // Real-time metric counters from table state
-  const rows = document.querySelectorAll('.dp-table tbody tr');
-  let ok = 0, fail = 0, error = 0;
-  rows.forEach(r => {
-    if (r.classList.contains('row-ok')) ok++;
-    else if (r.classList.contains('row-fail')) fail++;
-    else if (r.classList.contains('row-error')) error++;
-  });
-  const total = rows.length;
-  const vals = document.querySelectorAll('.metric-val');
-  if (vals.length >= 4) {
-    vals[0].textContent = ok;
-    vals[1].textContent = fail;
-    vals[2].textContent = error;
-    vals[3].textContent = total;
-  }
-</script>
 {% endblock %}
