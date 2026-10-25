@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title_suffix %} — Usuń regułę{% endblock %}
+{% block title_suffix %} — Delete rule{% endblock %}
 
 {% block content %}
 <div class="mb-4 animate-fadeup">
@@ -20,19 +20,19 @@
       </svg>
     </div>
 
-    <h2 style="font-size:1.15rem;margin-bottom:0.5rem">Usuń regułę?</h2>
+    <h2 style="font-size:1.15rem;margin-bottom:0.5rem">Delete rule?</h2>
     <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:1.5rem;line-height:1.6">
-      Reguła <strong style="color:var(--text-primary)">{{ rule.name }}</strong>
-      (<code>{{ rule.schema_name }}.{{ rule.table_name }}</code>) oraz cała jej historia zostanie trwale usunięta. Tej operacji nie można cofnąć.
+      Rule <strong style="color:var(--text-primary)">{{ rule.name }}</strong>
+      (<code>{{ rule.schema_name }}.{{ rule.table_name }}</code>) and all its history will be permanently deleted. This action cannot be undone.
     </p>
 
     <form method="post" class="d-flex gap-2">
       {% csrf_token %}
       <button type="submit" class="btn-dp btn-dp-danger">
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Tak, usuń
+        Yes, delete
       </button>
-      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Anuluj</a>
+      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Cancel</a>
     </form>
   </div>
 </div>

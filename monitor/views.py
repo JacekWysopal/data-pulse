@@ -53,11 +53,11 @@ def run_checks(request):
         ok_count = run.ok_count
 
         if error_count:
-            messages.warning(request, f'Przebieg zakończony: {ok_count} OK, {fail_count} FAIL, {error_count} ERROR.')
+            messages.warning(request, f'Run complete: {ok_count} OK, {fail_count} FAIL, {error_count} ERROR.')
         elif fail_count:
-            messages.warning(request, f'Przebieg zakończony: {ok_count} OK, {fail_count} FAIL.')
+            messages.warning(request, f'Run complete: {ok_count} OK, {fail_count} FAIL.')
         else:
-            messages.success(request, f'Przebieg zakończony: {ok_count} OK — wszystkie reguły spełnione.')
+            messages.success(request, f'Run complete: {ok_count} OK — all rules passed.')
 
     return redirect('monitor:dashboard')
 
@@ -81,7 +81,7 @@ def rule_create(request):
         form = RuleForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Reguła została dodana.')
+            messages.success(request, 'Rule added.')
             return redirect('monitor:dashboard')
     else:
         form = RuleForm()
@@ -97,7 +97,7 @@ def rule_edit(request, rule_id):
         form = RuleForm(request.POST, instance=rule)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Reguła została zaktualizowana.')
+            messages.success(request, 'Rule updated.')
             return redirect('monitor:dashboard')
     else:
         form = RuleForm(instance=rule)
@@ -112,7 +112,7 @@ def rule_delete(request, rule_id):
     if request.method == 'POST':
         rule_name = str(rule)
         rule.delete()
-        messages.success(request, f'Reguła „{rule_name}" została usunięta.')
+        messages.success(request, f'Rule "{rule_name}" deleted.')
         return redirect('monitor:dashboard')
 
     return render(request, 'monitor/rule_confirm_delete.html', {'rule': rule})

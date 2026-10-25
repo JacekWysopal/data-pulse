@@ -65,7 +65,7 @@
       </div>
     {% endif %}
 
-    <div class="form-section-label">Identyfikacja reguły</div>
+    <div class="form-section-label">Rule identity</div>
 
     <!-- Name -->
     <div class="mb-4">
@@ -94,13 +94,13 @@
       </div>
     </div>
 
-    <div class="form-section-label">Warunki monitoringu</div>
+    <div class="form-section-label">Monitoring conditions</div>
 
     <!-- Volume -->
     <div class="mb-4">
       <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
         {{ form.min_row_count.label }}
-        <span class="optional-tag">opcjonalne</span>
+        <span class="optional-tag">optional</span>
       </label>
       {{ form.min_row_count }}
       {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
@@ -114,7 +114,7 @@
       <div class="col-7">
         <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
           {{ form.timestamp_column.label }}
-          <span class="optional-tag">opcjonalne</span>
+          <span class="optional-tag">optional</span>
         </label>
         {{ form.timestamp_column }}
         {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
@@ -135,9 +135,9 @@
     <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
       <button type="submit" class="btn-dp btn-dp-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Zapisz regułę
+        Save rule
       </button>
-      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Anuluj</a>
+      <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Cancel</a>
     </div>
   </form>
 </div>

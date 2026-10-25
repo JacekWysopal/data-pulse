@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DataPulse — Logowanie</title>
+  <title>DataPulse — Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -233,8 +233,8 @@
   </div>
 
   <div class="login-card">
-    <div class="login-title">Zaloguj się</div>
-    <div class="login-sub">Monitoring jakości danych PostgreSQL</div>
+    <div class="login-title">Sign in</div>
+    <div class="login-sub">PostgreSQL data quality monitoring</div>
 
     {% if form.errors %}
     <div class="login-error">
@@ -246,7 +246,7 @@
     <form method="post">
       {% csrf_token %}
       <div class="field-group">
-        <label for="id_username">Nazwa użytkownika</label>
+        <label for="id_username">Username</label>
         <input type="text" name="username" id="id_username" autocomplete="username" autofocus placeholder="user@datapulse">
       </div>
       <div class="field-group">
@@ -254,7 +254,7 @@
         <input type="password" name="password" id="id_password" autocomplete="current-password" placeholder="••••••••">
       </div>
       <input type="hidden" name="next" value="{{ next }}">
-      <button type="submit" class="btn-login">Zaloguj się →</button>
+      <button type="submit" class="btn-login">Sign in →</button>
     </form>
   </div>
 

@@ -239,7 +239,7 @@
     <div class="kpi-top">
       <div>
         <div class="kpi-number" style="color:var(--text-secondary)">{{ total_count }}</div>
-        <div class="kpi-label">Łącznie reguł</div>
+        <div class="kpi-label">Total rules</div>
       </div>
       <div class="kpi-icon" style="background:var(--accent-dim)">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="2" rx="1" fill="#818cf8"/><rect x="2" y="8" width="14" height="2" rx="1" fill="#818cf8" opacity=".6"/><rect x="2" y="12" width="9" height="2" rx="1" fill="#818cf8" opacity=".3"/></svg>
@@ -256,17 +256,17 @@
 <div class="dp-panel animate-fadeup animate-fadeup-4">
 
   <div class="dp-panel-header">
-    <span class="dp-panel-title">Reguły monitoringu</span>
+    <span class="dp-panel-title">Monitoring rules</span>
     <div class="d-flex align-items-center gap-2">
       <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-ghost btn-dp-sm">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Dodaj regułę
+        Add rule
       </a>
       <form method="post" action="{% url 'monitor:run_checks' %}" data-run-form>
         {% csrf_token %}
         <button type="submit" class="btn-dp btn-dp-primary btn-dp-sm" data-run-btn>
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1.5l7 4-7 4V1.5z" fill="currentColor"/></svg>
-          Uruchom sprawdzenie
+          Run checks
         </button>
       </form>
     </div>
@@ -275,7 +275,7 @@
   {% if last_run %}
   <div class="run-bar">
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-    Ostatni przebieg:
+    Last run:
     <strong style="color:var(--text-secondary)">{{ last_run.started_at|date:"Y-m-d H:i:s" }}</strong>
     <span style="color:var(--text-faint)">·</span>
     <span style="color:var(--ok)">{{ last_run.ok_count }} OK</span>
@@ -289,11 +289,11 @@
     <table class="dp-table">
       <thead>
         <tr>
-          <th>Reguła</th>
-          <th>Tabela</th>
-          <th>Warunki</th>
+          <th>Rule</th>
+          <th>Table</th>
+          <th>Conditions</th>
           <th>Status</th>
-          <th>Zmierzone wartości</th>
+          <th>Measured values</th>
           <th></th>
         </tr>
       </thead>
@@ -327,7 +327,7 @@
             {% elif item.status == 'ERROR' %}
               <span class="dp-badge dp-badge-error"><span class="dp-badge-dot"></span>ERROR</span>
             {% else %}
-              <span class="dp-badge dp-badge-never"><span class="dp-badge-dot"></span>Brak danych</span>
+              <span class="dp-badge dp-badge-never"><span class="dp-badge-dot"></span>No data</span>
             {% endif %}
           </td>
 
@@ -336,12 +336,12 @@
               <div style="display:flex;flex-direction:column;gap:3px">
                 {% if item.result.row_count is not None %}
                   <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}">
-                    {{ item.result.row_count }} wierszy{% if item.rule.min_row_count is not None %} <span style="color:var(--text-muted)">(próg: {{ item.rule.min_row_count }})</span>{% endif %}
+                    {{ item.result.row_count }} rows{% if item.rule.min_row_count is not None %} <span style="color:var(--text-muted)">(threshold: {{ item.rule.min_row_count }})</span>{% endif %}
                   </span>
                 {% endif %}
                 {% if item.result.last_record_age_hours is not None %}
                   <span class="{% if item.status == 'FAIL' %}meas-fail{% elif item.status == 'OK' %}meas-ok{% else %}meas-mute{% endif %}">
-                    {{ item.result.last_record_age_hours|floatformat:1 }}h temu {% if item.rule.max_age_hours %}<span style="color:var(--text-muted)">(próg: {{ item.rule.max_age_hours }}h)</span>{% endif %}
+                    {{ item.result.last_record_age_hours|floatformat:1 }}h ago {% if item.rule.max_age_hours %}<span style="color:var(--text-muted)">(threshold: {{ item.rule.max_age_hours }}h)</span>{% endif %}
                   </span>
                 {% endif %}
                 {% if item.result.error_message %}
@@ -355,8 +355,8 @@
 
           <td class="actions-cell">
             <div style="display:flex;gap:4px;justify-content:flex-end">
-              <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn-dp btn-dp-ghost btn-dp-xs">Edytuj</a>
-              <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn-dp btn-dp-danger btn-dp-xs">Usuń</a>
+              <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn-dp btn-dp-ghost btn-dp-xs">Edit</a>
+              <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn-dp btn-dp-danger btn-dp-xs">Delete</a>
             </div>
           </td>
 
@@ -369,11 +369,11 @@
   {% else %}
   <div class="empty-state">
     <div class="empty-icon">◈</div>
-    <div style="font-size:0.95rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.4rem">Brak reguł monitoringu</div>
-    <div style="font-size:0.8rem;margin-bottom:1.5rem">Dodaj pierwszą regułę, aby zacząć monitorować tabele PostgreSQL.</div>
+    <div style="font-size:0.95rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.4rem">No monitoring rules</div>
+    <div style="font-size:0.8rem;margin-bottom:1.5rem">Add your first rule to start monitoring PostgreSQL tables.</div>
     <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-primary">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      Dodaj pierwszą regułę
+      Add first rule
     </a>
   </div>
   {% endif %}

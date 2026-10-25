@@ -14,18 +14,18 @@ from monitor.models import CheckRun, Rule, RuleResult
 
 RULES = [
     # (name, schema, table, timestamp_col, max_age_h, min_rows)
-    ('orders_freshness',      'public',    'orders',           'created_at',   1,   100),
-    ('users_volume',          'public',    'users',            None,           None, 500),
-    ('events_log',            'analytics', 'events',           'logged_at',    2,   None),
-    ('products_sync',         'public',    'products',         'synced_at',    24,  50),
-    ('payments_freshness',    'finance',   'payments',         'paid_at',      6,   10),
-    ('sessions_volume',       'public',    'sessions',         None,           None, 1000),
-    ('alerts_log',            'ops',       'alerts',           'triggered_at', 1,   None),
-    ('inventory_snapshot',    'warehouse', 'inventory',        'snapshot_at',  48,  200),
-    ('dim_customers',         'dw',        'dim_customers',    None,           None, 5000),
-    ('fact_sales_daily',      'dw',        'fact_sales',       'sale_date',    25,  None),
-    ('api_logs',              'logs',      'api_requests',     'ts',           1,   None),
-    ('reports_cache',         'cache',     'report_snapshots', 'generated_at', 12,  None),
+    ('orders_freshness',      'public', 'orders',           'created_at',   1,   100),
+    ('users_volume',          'public', 'users',            None,           None, 500),
+    ('events_log',            'public', 'events',           'logged_at',    2,   None),
+    ('products_sync',         'public', 'products',         'synced_at',    24,  50),
+    ('payments_freshness',    'public', 'payments',         'paid_at',      6,   10),
+    ('sessions_volume',       'public', 'sessions',         None,           None, 1000),
+    ('alerts_log',            'public', 'alerts',           'triggered_at', 1,   None),
+    ('inventory_snapshot',    'public', 'inventory',        'snapshot_at',  48,  200),
+    ('dim_customers',         'public', 'dim_customers',    None,           None, 5000),
+    ('fact_sales_daily',      'public', 'fact_sales',       'sale_date',    25,  None),
+    ('api_logs',              'public', 'api_requests',     'ts',           1,   None),
+    ('reports_cache',         'public', 'report_snapshots', 'generated_at', 12,  None),
 ]
 
 
