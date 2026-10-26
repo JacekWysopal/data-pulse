@@ -1,7 +1,8 @@
 """
-Logika domenowa DataPulse.
-Łączy się z monitorowaną bazą PostgreSQL i ocenia reguły.
-Connection string pochodzi wyłącznie z settings.MONITORED_DATABASE_URL.
+DataPulse domain logic.
+Connects to monitored PostgreSQL and evaluates rules.
+Connection string comes from rule.connection (UI-managed) or
+falls back to settings.MONITORED_DATABASE_URL.
 """
 
 import psycopg2
@@ -12,28 +13,31 @@ from .models import CheckRun, Rule, RuleResult
 
 
 class MonitoredDbError(Exception):
-    """Błąd połączenia z monitorowaną bazą."""
+    """Error connecting to the monitored database."""
 
 
-def _get_connection():
-    """Otwiera połączenie z monitorowaną bazą PostgreSQL."""
-    url = settings.MONITORED_DATABASE_URL
+def _get_connection(rule: Rule):
+    """Open a connection to the monitored PostgreSQL for this rule."""
+    if rule.connection_id:
+        url = rule.connection.get_database_url()
+        source = f'connection "{rule.connection.name}"'
+    else:
+        url = settings.MONITORED_DATABASE_URL
+        source = 'MONITORED_DATABASE_URL'
+
     if not url:
         raise MonitoredDbError(
-            'Brak MONITORED_DATABASE_URL w pliku .env. '
-            'Uzupełnij connection string do monitorowanej bazy.'
+            f'No database URL configured. '
+            f'Assign a Connection to this rule or set MONITORED_DATABASE_URL in environment.'
         )
     try:
         return psycopg2.connect(url)
     except psycopg2.OperationalError as e:
-        raise MonitoredDbError(f'Nie można połączyć się z bazą: {e}') from e
+        raise MonitoredDbError(f'Cannot connect ({source}): {e}') from e
 
 
 def _check_rule(conn, rule: Rule) -> dict:
-    """
-    Sprawdza jedną regułę na otwartym połączeniu.
-    Zwraca słownik z row_count, last_record_age_hours, status, error_message.
-    """
+    """Check one rule on an open connection."""
     result = {
         'row_count': None,
         'last_record_age_hours': None,
@@ -45,7 +49,6 @@ def _check_rule(conn, rule: Rule) -> dict:
         with conn.cursor() as cur:
             table = f'"{rule.schema_name}"."{rule.table_name}"'
 
-            # Sprawdzenie wolumenu
             if rule.min_row_count is not None:
                 cur.execute(f'SELECT COUNT(*) FROM {table}')  # noqa: S608
                 (count,) = cur.fetchone()
@@ -53,7 +56,6 @@ def _check_rule(conn, rule: Rule) -> dict:
                 if count < rule.min_row_count:
                     result['status'] = RuleResult.Status.FAIL
 
-            # Sprawdzenie freshness
             if rule.timestamp_column and rule.max_age_hours is not None:
                 col = f'"{rule.timestamp_column}"'
                 cur.execute(
@@ -74,42 +76,60 @@ def _check_rule(conn, rule: Rule) -> dict:
 
 def run_all_checks() -> CheckRun:
     """
-    Uruchamia sprawdzenie wszystkich reguł.
-    Zawsze zwraca CheckRun — nawet gdy połączenie z bazą się nie uda,
-    błąd jest rejestrowany per reguła zamiast przerywać cały przebieg.
+    Run all rules. Always returns a CheckRun.
+    Each rule uses its own connection — errors are recorded per rule.
     """
     run = CheckRun.objects.create()
-    rules = Rule.objects.all()
+    rules = Rule.objects.select_related('connection').all()
 
-    conn = None
-    connection_error = None
-
-    try:
-        conn = _get_connection()
-    except MonitoredDbError as e:
-        connection_error = str(e)
+    # Group rules by connection URL to reuse connections
+    conn_cache: dict[str | None, tuple] = {}  # url -> (conn, error)
 
     for rule in rules:
-        if connection_error:
+        try:
+            if rule.connection_id:
+                url = rule.connection.get_database_url()
+            else:
+                url = settings.MONITORED_DATABASE_URL
+
+            if url not in conn_cache:
+                try:
+                    conn_cache[url] = (psycopg2.connect(url) if url else None, None)
+                except psycopg2.OperationalError as e:
+                    conn_cache[url] = (None, str(e))
+
+            conn, conn_error = conn_cache[url]
+
+            if conn_error or conn is None:
+                msg = conn_error or 'No database URL configured for this rule.'
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message=msg,
+                )
+            else:
+                result = _check_rule(conn, rule)
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=result['status'],
+                    row_count=result['row_count'],
+                    last_record_age_hours=result['last_record_age_hours'],
+                    error_message=result['error_message'],
+                )
+
+        except Exception as e:
             RuleResult.objects.create(
-                run=run,
-                rule=rule,
+                run=run, rule=rule,
                 status=RuleResult.Status.ERROR,
-                error_message=connection_error,
-            )
-        else:
-            result = _check_rule(conn, rule)
-            RuleResult.objects.create(
-                run=run,
-                rule=rule,
-                status=result['status'],
-                row_count=result['row_count'],
-                last_record_age_hours=result['last_record_age_hours'],
-                error_message=result['error_message'],
+                error_message=str(e),
             )
 
-    if conn:
-        conn.close()
+    for conn, _ in conn_cache.values():
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     run.finished_at = timezone.now()
     run.save()

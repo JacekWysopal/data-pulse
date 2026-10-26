@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title_suffix %} — Delete connection{% endblock %}
+
+{% block content %}
+<div class="mb-4 animate-fadeup">
+  <a href="{% url 'monitor:connection_list' %}" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Connections
+  </a>
+</div>
+
+<div style="max-width:480px" class="animate-fadeup animate-fadeup-1">
+  <div class="dp-card" style="padding:2rem;border-color:rgba(248,113,113,0.2)">
+    <div style="width:44px;height:44px;border-radius:12px;background:var(--fail-dim);border:1px solid rgba(248,113,113,0.25);display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M9 2H11C11.5523 2 12 2.44772 12 3V4H16C16.5523 4 17 4.44772 17 5V6H3V5C3 4.44772 3.44772 4 4 4H8V3C8 2.44772 8.44772 2 9 2Z" fill="#f87171"/>
+        <path d="M5 7L5.89443 15.5528C5.95898 16.1464 6.46462 16.6 7.06168 16.6H12.9383C13.5354 16.6 14.041 16.1464 14.1056 15.5528L15 7H5Z" fill="#f87171" fill-opacity="0.3" stroke="#f87171" stroke-width="1.2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <h2 style="font-size:1.15rem;margin-bottom:0.5rem">Delete connection?</h2>
+    <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:0.75rem;line-height:1.6">
+      Connection <strong style="color:var(--text-primary)">{{ conn.name }}</strong> will be permanently deleted.
+    </p>
+
+    {% with rule_count=conn.rules.count %}
+    {% if rule_count %}
+    <div class="dp-alert dp-alert-warning mb-3" style="font-size:0.8rem">
+      ⚠ {{ rule_count }} rule{{ rule_count|pluralize }} use this connection. They will fall back to the default environment URL.
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <form method="post" class="d-flex gap-2">
+      {% csrf_token %}
+      <button type="submit" class="btn-dp btn-dp-danger">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Yes, delete
+      </button>
+      <a href="{% url 'monitor:connection_list' %}" class="btn-dp btn-dp-ghost">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

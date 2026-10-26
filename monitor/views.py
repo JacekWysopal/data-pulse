@@ -2,15 +2,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import RuleForm
-from .models import CheckRun, Rule, RuleResult
+from .forms import ConnectionForm, RuleForm
+from .models import CheckRun, Connection, Rule, RuleResult
 from .services import run_all_checks
 
 
+# ── Dashboard ────────────────────────────────────────────────
+
 @login_required
 def dashboard(request):
-    """Widok główny: lista reguł ze statusem ostatniego przebiegu."""
-    rules = Rule.objects.prefetch_related('results').all()
+    rules = Rule.objects.select_related('connection').prefetch_related('results').all()
     last_run = CheckRun.objects.first()
 
     ok_count = fail_count = error_count = never_count = 0
@@ -26,11 +27,7 @@ def dashboard(request):
             error_count += 1
         else:
             never_count += 1
-        rule_status.append({
-            'rule': rule,
-            'result': last_result,
-            'status': status,
-        })
+        rule_status.append({'rule': rule, 'result': last_result, 'status': status})
 
     return render(request, 'monitor/dashboard.html', {
         'rule_status': rule_status,
@@ -45,38 +42,28 @@ def dashboard(request):
 
 @login_required
 def run_checks(request):
-    """Uruchamia sprawdzenie wszystkich reguł (POST)."""
     if request.method == 'POST':
         run = run_all_checks()
-        fail_count = run.fail_count
-        error_count = run.error_count
-        ok_count = run.ok_count
-
-        if error_count:
-            messages.warning(request, f'Run complete: {ok_count} OK, {fail_count} FAIL, {error_count} ERROR.')
-        elif fail_count:
-            messages.warning(request, f'Run complete: {ok_count} OK, {fail_count} FAIL.')
+        if run.error_count:
+            messages.warning(request, f'Run complete: {run.ok_count} OK, {run.fail_count} FAIL, {run.error_count} ERROR.')
+        elif run.fail_count:
+            messages.warning(request, f'Run complete: {run.ok_count} OK, {run.fail_count} FAIL.')
         else:
-            messages.success(request, f'Run complete: {ok_count} OK — all rules passed.')
-
+            messages.success(request, f'Run complete: {run.ok_count} OK — all rules passed.')
     return redirect('monitor:dashboard')
 
 
+# ── Rules ─────────────────────────────────────────────────────
+
 @login_required
 def rule_history(request, rule_id):
-    """Historia wyników dla jednej reguły."""
     rule = get_object_or_404(Rule, pk=rule_id)
     results = rule.results.select_related('run').order_by('-checked_at')[:20]
-
-    return render(request, 'monitor/rule_history.html', {
-        'rule': rule,
-        'results': results,
-    })
+    return render(request, 'monitor/rule_history.html', {'rule': rule, 'results': results})
 
 
 @login_required
 def rule_create(request):
-    """Formularz tworzenia nowej reguły."""
     if request.method == 'POST':
         form = RuleForm(request.POST)
         if form.is_valid():
@@ -85,13 +72,11 @@ def rule_create(request):
             return redirect('monitor:dashboard')
     else:
         form = RuleForm()
-
-    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Dodaj regułę'})
+    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Add rule'})
 
 
 @login_required
 def rule_edit(request, rule_id):
-    """Formularz edycji istniejącej reguły."""
     rule = get_object_or_404(Rule, pk=rule_id)
     if request.method == 'POST':
         form = RuleForm(request.POST, instance=rule)
@@ -101,18 +86,61 @@ def rule_edit(request, rule_id):
             return redirect('monitor:dashboard')
     else:
         form = RuleForm(instance=rule)
-
-    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Edytuj regułę', 'rule': rule})
+    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Edit rule', 'rule': rule})
 
 
 @login_required
 def rule_delete(request, rule_id):
-    """Usunięcie reguły (POST)."""
     rule = get_object_or_404(Rule, pk=rule_id)
     if request.method == 'POST':
-        rule_name = str(rule)
+        name = str(rule)
         rule.delete()
-        messages.success(request, f'Rule "{rule_name}" deleted.')
+        messages.success(request, f'Rule "{name}" deleted.')
         return redirect('monitor:dashboard')
-
     return render(request, 'monitor/rule_confirm_delete.html', {'rule': rule})
+
+
+# ── Connections ───────────────────────────────────────────────
+
+@login_required
+def connection_list(request):
+    connections = Connection.objects.prefetch_related('rules').all()
+    return render(request, 'monitor/connection_list.html', {'connections': connections})
+
+
+@login_required
+def connection_create(request):
+    if request.method == 'POST':
+        form = ConnectionForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Connection added.')
+            return redirect('monitor:connection_list')
+    else:
+        form = ConnectionForm()
+    return render(request, 'monitor/connection_form.html', {'form': form, 'action': 'Add connection'})
+
+
+@login_required
+def connection_edit(request, conn_id):
+    conn = get_object_or_404(Connection, pk=conn_id)
+    if request.method == 'POST':
+        form = ConnectionForm(request.POST, instance=conn)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Connection updated.')
+            return redirect('monitor:connection_list')
+    else:
+        form = ConnectionForm(instance=conn)
+    return render(request, 'monitor/connection_form.html', {'form': form, 'action': 'Edit connection', 'conn': conn})
+
+
+@login_required
+def connection_delete(request, conn_id):
+    conn = get_object_or_404(Connection, pk=conn_id)
+    if request.method == 'POST':
+        name = conn.name
+        conn.delete()
+        messages.success(request, f'Connection "{name}" deleted.')
+        return redirect('monitor:connection_list')
+    return render(request, 'monitor/connection_confirm_delete.html', {'conn': conn})

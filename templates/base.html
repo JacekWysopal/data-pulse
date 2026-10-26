@@ -510,10 +510,14 @@
     <div class="container d-flex align-items-center justify-content-between">
       <a class="dp-brand" href="{% url 'monitor:dashboard' %}">
         <div class="dp-brand-icon">
-          <img src="{% static 'img/logo.png' %}" alt="DataPulse" style="width:18px;height:18px;object-fit:contain">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 11 L5 7 L8 9 L11 4 L14 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="14" cy="6" r="1.5" fill="white"/>
+          </svg>
         </div>
         <span class="dp-brand-name">Data<span>Pulse</span></span>
       </a>
+      <a href="{% url 'monitor:connection_list' %}" style="font-size:0.78rem;color:var(--text-muted);text-decoration:none;padding:4px 10px;border-radius:6px;transition:all 0.15s" onmouseover="this.style.color='var(--text-secondary)';this.style.background='var(--bg-elevated)'" onmouseout="this.style.color='var(--text-muted)';this.style.background=''">Connections</a>
       <div class="d-flex align-items-center gap-3">
         <span class="dp-live-badge">
           <span class="dp-live-dot"></span>

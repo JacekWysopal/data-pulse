@@ -1,40 +1,108 @@
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
+import base64
+import os
+
+try:
+    from cryptography.fernet import Fernet
+    _FERNET_AVAILABLE = True
+except ImportError:
+    _FERNET_AVAILABLE = False
+
+
+def _get_fernet():
+    key = getattr(settings, 'FIELD_ENCRYPTION_KEY', None)
+    if not key or not _FERNET_AVAILABLE:
+        return None
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+class Connection(models.Model):
+    """Named PostgreSQL connection managed by the user via UI."""
+
+    name = models.CharField(max_length=200, unique=True)
+    description = models.CharField(max_length=500, blank=True)
+    _database_url = models.TextField(db_column='database_url')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def set_database_url(self, url):
+        f = _get_fernet()
+        if f:
+            self._database_url = f.encrypt(url.encode()).decode()
+        else:
+            self._database_url = url
+
+    def get_database_url(self):
+        f = _get_fernet()
+        if f:
+            try:
+                return f.decrypt(self._database_url.encode()).decode()
+            except Exception:
+                return self._database_url
+        return self._database_url
+
+    @property
+    def masked_url(self):
+        """Return URL with password replaced by ***."""
+        url = self.get_database_url()
+        if not url:
+            return ''
+        try:
+            from urllib.parse import urlparse, urlunparse
+            p = urlparse(url)
+            masked = p._replace(password='***')
+            return urlunparse(masked)
+        except Exception:
+            return '***'
 
 
 class Rule(models.Model):
-    """Reguła monitoringu dla jednej tabeli PostgreSQL."""
+    """Monitoring rule for one PostgreSQL table."""
 
-    name = models.CharField(max_length=200, verbose_name='Nazwa reguły')
-    schema_name = models.CharField(max_length=100, verbose_name='Schemat')
-    table_name = models.CharField(max_length=100, verbose_name='Tabela')
+    name = models.CharField(max_length=200, verbose_name='Rule name')
+    schema_name = models.CharField(max_length=100, verbose_name='Schema')
+    table_name = models.CharField(max_length=100, verbose_name='Table')
 
-    # Reguła freshness — opcjonalna
+    connection = models.ForeignKey(
+        Connection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rules',
+        verbose_name='Connection',
+        help_text='Leave empty to use the default MONITORED_DATABASE_URL from environment.',
+    )
+
     timestamp_column = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name='Kolumna timestampowa',
-        help_text='Nazwa kolumny do sprawdzenia świeżości (opcjonalne)',
+        verbose_name='Timestamp column',
+        help_text='Column name for freshness check (optional)',
     )
     max_age_hours = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name='Maksymalny wiek rekordu (godz.)',
+        verbose_name='Max record age (hours)',
     )
 
-    # Reguła wolumenu — opcjonalna
     min_row_count = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name='Minimalna liczba wierszy',
+        verbose_name='Min row count',
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Reguła'
-        verbose_name_plural = 'Reguły'
         ordering = ['schema_name', 'table_name', 'name']
         constraints = [
             models.CheckConstraint(
@@ -59,14 +127,12 @@ class Rule(models.Model):
 
 
 class CheckRun(models.Model):
-    """Jeden przebieg sprawdzenia wszystkich reguł."""
+    """One execution of all monitoring rules."""
 
     started_at = models.DateTimeField(default=timezone.now)
     finished_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        verbose_name = 'Przebieg'
-        verbose_name_plural = 'Przebiegi'
         ordering = ['-started_at']
 
     def __str__(self):
@@ -86,28 +152,23 @@ class CheckRun(models.Model):
 
 
 class RuleResult(models.Model):
-    """Wynik sprawdzenia jednej reguły w jednym przebiegu."""
+    """Result of checking one rule in one run."""
 
     class Status(models.TextChoices):
         OK = 'OK', 'OK'
         FAIL = 'FAIL', 'FAIL'
-        ERROR = 'ERROR', 'Błąd'
+        ERROR = 'ERROR', 'Error'
 
     run = models.ForeignKey(CheckRun, on_delete=models.CASCADE, related_name='results')
     rule = models.ForeignKey(Rule, on_delete=models.CASCADE, related_name='results')
     checked_at = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=10, choices=Status.choices)
 
-    # Zmierzone wartości
     row_count = models.PositiveIntegerField(null=True, blank=True)
     last_record_age_hours = models.FloatField(null=True, blank=True)
-
-    # Komunikat błędu (gdy status=ERROR)
     error_message = models.TextField(blank=True)
 
     class Meta:
-        verbose_name = 'Wynik reguły'
-        verbose_name_plural = 'Wyniki reguł'
         ordering = ['-checked_at']
 
     def __str__(self):
