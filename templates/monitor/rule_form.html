@@ -24,7 +24,40 @@
   }
   .field-error { color: var(--fail); font-size: 0.75rem; margin-top: 0.3rem; }
 
-  /* Schema browser */
+  /* Rule type toggle */
+  .rule-type-radio { display: none; }
+  .rule-type-tabs {
+    display: flex; gap: 6px; margin-bottom: 1.25rem;
+  }
+  .rule-type-tab {
+    flex: 1; padding: 8px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-size: 0.8rem; font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer; text-align: center;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .rule-type-tab:hover { border-color: var(--accent); color: var(--text-secondary); }
+  .rule-type-tab.active {
+    background: var(--accent-dim);
+    border-color: rgba(99,102,241,0.4);
+    color: var(--accent-hover);
+  }
+  .sql-editor {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  .sql-hint {
+    font-size: 0.72rem; color: var(--text-muted);
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 6px 10px; margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
   .schema-browser {
     background: var(--bg-elevated);
     border: 1px solid var(--border-strong);
@@ -128,6 +161,39 @@
       {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
     </div>
 
+    <!-- S-06: Rule type toggle -->
+    <div class="form-section-label">Rule type</div>
+    {{ form.rule_type }}
+    <div class="rule-type-tabs" id="rule-type-tabs">
+      <div class="rule-type-tab{% if not form.rule_type.value or form.rule_type.value == 'volume_freshness' %} active{% endif %}" data-type="volume_freshness">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><rect x="1" y="2" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="5.25" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="8.5" width="6" height="1.5" rx=".75" fill="currentColor"/></svg>
+        Volume / Freshness
+      </div>
+      <div class="rule-type-tab{% if form.rule_type.value == 'custom_sql' %} active{% endif %}" data-type="custom_sql">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><path d="M3 4L1 6l2 2M9 4l2 2-2 2M7 2l-2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Custom SQL
+      </div>
+    </div>
+
+    <!-- S-06: Custom SQL section -->
+    <div id="custom-sql-section" style="display:{% if form.rule_type.value == 'custom_sql' %}block{% else %}none{% endif %}">
+      <div class="mb-4">
+        <label for="{{ form.custom_sql.id_for_label }}" class="form-label">SQL query</label>
+        <textarea id="{{ form.custom_sql.id_for_label }}" name="custom_sql"
+          class="form-control" rows="5"
+          style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;resize:vertical"
+          placeholder="SELECT COUNT(*) > 0 FROM public.orders WHERE created_at > NOW() - INTERVAL '1 hour'">{{ form.custom_sql.value|default:'' }}</textarea>
+        <div style="font-size:0.72rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:5px;padding:6px 10px;margin-top:6px;font-family:'JetBrains Mono',monospace">
+          Returns <strong style="color:var(--ok)">true</strong> / <strong style="color:var(--ok)">1</strong> = OK &nbsp;·&nbsp;
+          <strong style="color:var(--fail)">false</strong> / <strong style="color:var(--fail)">0</strong> / NULL / empty = FAIL
+        </div>
+        {% if form.custom_sql.errors %}<div class="field-error">✗ {{ form.custom_sql.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Volume / Freshness section -->
+    <div id="vf-section" style="display:{% if form.rule_type.value == 'custom_sql' %}none{% else %}block{% endif %}">
+
     <!-- ── Table selector (S-04/S-05) ── -->
     <div class="form-section-label">
       Target table
@@ -198,6 +264,8 @@
       </div>
     </div>
 
+    </div><!-- /vf-section -->
+
     <!-- ── Schedule ── -->
     <div class="form-section-label">Schedule</div>
     <div class="mb-4">
@@ -222,6 +290,27 @@
 
 {% block extra_scripts %}
 <script>
+// S-06: Rule type toggle
+(function() {
+  const tabs      = document.querySelectorAll('.rule-type-tab');
+  const sqlSec    = document.getElementById('custom-sql-section');
+  const vfSec     = document.getElementById('vf-section');
+  const radioInputs = document.querySelectorAll('.rule-type-radio input, input[name="rule_type"]');
+
+  function setType(type) {
+    sqlSec.style.display = type === 'custom_sql' ? 'block' : 'none';
+    vfSec.style.display  = type === 'custom_sql' ? 'none'  : 'block';
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.type === type));
+    // Sync hidden radio
+    radioInputs.forEach(r => { if (r.value === type) r.checked = true; });
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => setType(tab.dataset.type));
+  });
+}());
+
+// S-04/S-05: Schema browser
 (function() {
   const connSelect   = document.getElementById('id_connection');
   const schemaInput  = document.getElementById('id_schema_name');

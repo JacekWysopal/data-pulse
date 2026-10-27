@@ -5,6 +5,8 @@ Connection string comes from rule.connection (UI-managed) or
 falls back to settings.MONITORED_DATABASE_URL.
 """
 
+import re
+
 import psycopg2
 from django.conf import settings
 from django.utils import timezone
@@ -108,8 +110,72 @@ def get_schema_columns(conn_id: int, schema: str, table: str) -> dict:
         conn.close()
 
 
-def _check_rule(conn, rule: Rule) -> dict:
-    """Check one rule on an open connection."""
+def _check_volume_freshness(conn, rule: Rule) -> dict:
+    if rule.rule_type == Rule.RuleType.CUSTOM_SQL:
+        return _check_custom_sql(conn, rule)
+    return _check_volume_freshness(conn, rule)
+
+
+SQL_ALLOWED = re.compile(r'^\s*SELECT\b', re.IGNORECASE)
+SQL_FORBIDDEN = re.compile(
+    r'\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|EXECUTE|CALL)\b',
+    re.IGNORECASE,
+)
+
+
+def _check_custom_sql(conn, rule: Rule) -> dict:
+    """Execute custom SQL and interpret result as boolean."""
+    result = {
+        'row_count': None,
+        'last_record_age_hours': None,
+        'status': RuleResult.Status.OK,
+        'error_message': '',
+    }
+
+    sql = (rule.custom_sql or '').strip()
+    if not sql:
+        result['status'] = RuleResult.Status.ERROR
+        result['error_message'] = 'Custom SQL is empty.'
+        return result
+
+    if not SQL_ALLOWED.match(sql):
+        result['status'] = RuleResult.Status.ERROR
+        result['error_message'] = 'Custom SQL must start with SELECT.'
+        return result
+
+    if SQL_FORBIDDEN.search(sql):
+        result['status'] = RuleResult.Status.ERROR
+        result['error_message'] = 'Custom SQL contains forbidden keywords (INSERT/UPDATE/DROP etc.).'
+        return result
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SET statement_timeout = 30000')  # 30s
+            cur.execute(sql)
+            row = cur.fetchone()
+
+        if row is None:
+            result['status'] = RuleResult.Status.FAIL
+            return result
+
+        val = row[0]
+        falsy = {False, 0, '0', 'f', 'false', 'no', 'n', None}
+        if isinstance(val, str):
+            val_norm = val.strip().lower()
+        else:
+            val_norm = val
+
+        if val_norm in falsy:
+            result['status'] = RuleResult.Status.FAIL
+
+    except psycopg2.Error as e:
+        result['status'] = RuleResult.Status.ERROR
+        result['error_message'] = str(e)
+
+    return result
+
+
+def _check_volume_freshness(conn, rule: Rule) -> dict:
     result = {
         'row_count': None,
         'last_record_age_hours': None,

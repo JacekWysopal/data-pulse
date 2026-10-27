@@ -67,18 +67,39 @@ class Connection(models.Model):
 class Rule(models.Model):
     """Monitoring rule for one PostgreSQL table."""
 
+    class RuleType(models.TextChoices):
+        VOLUME_FRESHNESS = 'volume_freshness', 'Volume / Freshness'
+        CUSTOM_SQL       = 'custom_sql',       'Custom SQL'
+
     name = models.CharField(max_length=200, verbose_name='Rule name')
-    schema_name = models.CharField(max_length=100, verbose_name='Schema')
-    table_name = models.CharField(max_length=100, verbose_name='Table')
+    schema_name = models.CharField(max_length=100, blank=True, verbose_name='Schema')
+    table_name  = models.CharField(max_length=100, blank=True, verbose_name='Table')
 
     connection = models.ForeignKey(
         Connection,
         on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        null=True, blank=True,
         related_name='rules',
         verbose_name='Connection',
         help_text='Leave empty to use the default MONITORED_DATABASE_URL from environment.',
+    )
+
+    rule_type = models.CharField(
+        max_length=30,
+        choices=RuleType.choices,
+        default=RuleType.VOLUME_FRESHNESS,
+        verbose_name='Rule type',
+    )
+
+    # Custom SQL
+    custom_sql = models.TextField(
+        blank=True,
+        verbose_name='Custom SQL',
+        help_text=(
+            'SELECT query returning a single boolean-like value. '
+            'true / 1 = OK, false / 0 / NULL / empty = FAIL. '
+            'Must start with SELECT.'
+        ),
     )
 
     timestamp_column = models.CharField(
@@ -127,7 +148,13 @@ class Rule(models.Model):
 
     @property
     def full_table_name(self):
-        return f'"{self.schema_name}"."{self.table_name}"'
+        if self.schema_name and self.table_name:
+            return f'"{self.schema_name}"."{self.table_name}"'
+        return None
+
+    @property
+    def is_custom_sql(self):
+        return self.rule_type == self.RuleType.CUSTOM_SQL
 
     @property
     def last_result(self):
