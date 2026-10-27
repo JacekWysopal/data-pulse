@@ -14,6 +14,10 @@ urlpatterns = [
     path('rules/<int:rule_id>/edit/', views.rule_edit, name='rule_edit'),
     path('rules/<int:rule_id>/delete/', views.rule_delete, name='rule_delete'),
 
+    # Schema introspection (S-04)
+    path('api/schema/<int:conn_id>/tables/', views.api_schema_tables, name='api_schema_tables'),
+    path('api/schema/<int:conn_id>/columns/<str:schema>/<str:table>/', views.api_schema_columns, name='api_schema_columns'),
+
     # Connections
     path('connections/', views.connection_list, name='connection_list'),
     path('connections/new/', views.connection_create, name='connection_create'),

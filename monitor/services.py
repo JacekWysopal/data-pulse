@@ -9,31 +9,103 @@ import psycopg2
 from django.conf import settings
 from django.utils import timezone
 
-from .models import CheckRun, Rule, RuleResult
+from .models import CheckRun, Connection, Rule, RuleResult
+
+SCHEMA_CACHE_TTL = 300  # 5 minutes
 
 
 class MonitoredDbError(Exception):
     """Error connecting to the monitored database."""
 
 
-def _get_connection(rule: Rule):
-    """Open a connection to the monitored PostgreSQL for this rule."""
-    if rule.connection_id:
-        url = rule.connection.get_database_url()
-        source = f'connection "{rule.connection.name}"'
-    else:
-        url = settings.MONITORED_DATABASE_URL
-        source = 'MONITORED_DATABASE_URL'
-
+def _open_conn(url: str):
+    """Open a psycopg2 connection from a URL string."""
     if not url:
-        raise MonitoredDbError(
-            f'No database URL configured. '
-            f'Assign a Connection to this rule or set MONITORED_DATABASE_URL in environment.'
-        )
+        raise MonitoredDbError('No database URL provided.')
     try:
         return psycopg2.connect(url)
     except psycopg2.OperationalError as e:
-        raise MonitoredDbError(f'Cannot connect ({source}): {e}') from e
+        raise MonitoredDbError(str(e)) from e
+
+
+def get_schema_tables(conn_id: int) -> dict:
+    """
+    Return list of (schema, table) pairs from information_schema.
+    Result: {'tables': [{'schema': ..., 'table': ...}, ...], 'error': None}
+    """
+    try:
+        conn_obj = Connection.objects.get(pk=conn_id)
+        url = conn_obj.get_database_url()
+    except Connection.DoesNotExist:
+        return {'tables': [], 'error': 'Connection not found.'}
+
+    try:
+        conn = _open_conn(url)
+    except MonitoredDbError as e:
+        return {'tables': [], 'error': str(e)}
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT table_schema, table_name
+                FROM information_schema.tables
+                WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+                  AND table_type = 'BASE TABLE'
+                ORDER BY table_schema, table_name
+            """)
+            rows = cur.fetchall()
+        return {'tables': [{'schema': r[0], 'table': r[1]} for r in rows], 'error': None}
+    except psycopg2.Error as e:
+        return {'tables': [], 'error': str(e)}
+    finally:
+        conn.close()
+
+
+def get_schema_columns(conn_id: int, schema: str, table: str) -> dict:
+    """
+    Return columns for a given schema.table.
+    Result: {'columns': [{'name': ..., 'type': ..., 'is_timestamp': bool}, ...], 'error': None}
+    """
+    try:
+        conn_obj = Connection.objects.get(pk=conn_id)
+        url = conn_obj.get_database_url()
+    except Connection.DoesNotExist:
+        return {'columns': [], 'error': 'Connection not found.'}
+
+    try:
+        conn = _open_conn(url)
+    except MonitoredDbError as e:
+        return {'columns': [], 'error': str(e)}
+
+    TIMESTAMP_TYPES = {
+        'timestamp', 'timestamp without time zone', 'timestamp with time zone',
+        'timestamptz', 'date', 'time', 'timetz',
+    }
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = %s
+                ORDER BY ordinal_position
+            """, (schema, table))
+            rows = cur.fetchall()
+        return {
+            'columns': [
+                {
+                    'name': r[0],
+                    'type': r[1],
+                    'is_timestamp': r[1].lower() in TIMESTAMP_TYPES,
+                }
+                for r in rows
+            ],
+            'error': None,
+        }
+    except psycopg2.Error as e:
+        return {'columns': [], 'error': str(e)}
+    finally:
+        conn.close()
 
 
 def _check_rule(conn, rule: Rule) -> dict:

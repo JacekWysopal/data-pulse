@@ -1,10 +1,13 @@
+import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_GET
 
 from .forms import ConnectionForm, RuleForm
 from .models import CheckRun, Connection, Rule, RuleResult
-from .services import run_all_checks, run_single_rule
+from .services import get_schema_columns, get_schema_tables, run_all_checks, run_single_rule
 
 
 # ── Dashboard ────────────────────────────────────────────────
@@ -106,6 +109,40 @@ def rule_delete(request, rule_id):
         messages.success(request, f'Rule "{name}" deleted.')
         return redirect('monitor:dashboard')
     return render(request, 'monitor/rule_confirm_delete.html', {'rule': rule})
+
+
+# ── Schema introspection (S-04) ─────────────────────────────
+
+CACHE_KEY_TABLES  = 'dp_schema_tables_{}'
+CACHE_KEY_COLUMNS = 'dp_schema_cols_{}_{}_{}'  # conn_id, schema, table
+
+
+@login_required
+@require_GET
+def api_schema_tables(request, conn_id):
+    """AJAX: list tables for a connection. Session-cached 5 min."""
+    cache_key = CACHE_KEY_TABLES.format(conn_id)
+    cached = request.session.get(cache_key)
+    if cached:
+        return JsonResponse(cached)
+    result = get_schema_tables(conn_id)
+    if not result['error']:
+        request.session[cache_key] = result
+    return JsonResponse(result)
+
+
+@login_required
+@require_GET
+def api_schema_columns(request, conn_id, schema, table):
+    """AJAX: list columns for schema.table. Session-cached 5 min."""
+    cache_key = CACHE_KEY_COLUMNS.format(conn_id, schema, table)
+    cached = request.session.get(cache_key)
+    if cached:
+        return JsonResponse(cached)
+    result = get_schema_columns(conn_id, schema, table)
+    if not result['error']:
+        request.session[cache_key] = result
+    return JsonResponse(result)
 
 
 # ── Connections ───────────────────────────────────────────────

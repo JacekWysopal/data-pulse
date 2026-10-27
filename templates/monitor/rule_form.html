@@ -4,45 +4,95 @@
 {% block extra_head %}
 <style>
   .form-card {
-    max-width: 560px;
+    max-width: 580px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 2rem;
     box-shadow: var(--shadow-lg);
   }
-
   .form-section-label {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+    margin-bottom: 1rem; padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--border);
   }
-
   .optional-tag {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    padding: 1px 6px;
-    border-radius: 4px;
-    margin-left: 6px;
-    vertical-align: middle;
+    font-size: 0.7rem; font-weight: 500; color: var(--text-muted);
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
   }
+  .field-error { color: var(--fail); font-size: 0.75rem; margin-top: 0.3rem; }
 
-  .field-error {
-    color: var(--fail);
-    font-size: 0.75rem;
-    margin-top: 0.3rem;
+  /* Schema browser */
+  .schema-browser {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+  .schema-browser-header {
+    padding: 6px 10px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
+  .schema-spinner {
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .schema-spinner.active { display: inline-block; }
+  .schema-list {
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .schema-item {
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    transition: background 0.1s, color 0.1s;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .schema-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+  .schema-item.selected {
+    background: var(--accent-dim);
+    color: var(--accent-hover);
+    border: 1px solid rgba(99,102,241,0.25);
+  }
+  .schema-item-icon { font-size: 0.75rem; opacity: 0.6; flex-shrink: 0; }
+  .schema-error {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    color: var(--error);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .schema-fallback-note {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    padding: 4px 0;
+    display: none;
+  }
+  .schema-fallback-note.show { display: block; }
 </style>
 {% endblock %}
 
@@ -56,87 +106,103 @@
 </div>
 
 <div class="form-card animate-fadeup animate-fadeup-1">
-  <form method="post" novalidate>
+  <form method="post" novalidate id="rule-form">
     {% csrf_token %}
 
     {% if form.non_field_errors %}
-      <div class="dp-alert dp-alert-danger mb-3">
-        ✗ {{ form.non_field_errors }}
-      </div>
+      <div class="dp-alert dp-alert-danger mb-3">✗ {{ form.non_field_errors }}</div>
     {% endif %}
 
+    <!-- ── Rule identity ── -->
     <div class="form-section-label">Rule identity</div>
 
-    <!-- Name -->
-    <div class="mb-4">
+    <div class="mb-3">
       <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
       {{ form.name }}
-      {% if form.name.errors %}
-        <div class="field-error">✗ {{ form.name.errors|join:", " }}</div>
-      {% endif %}
+      {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <!-- Schema + Table in grid -->
-    <div class="row g-3 mb-4">
+    <div class="mb-4">
+      <label for="{{ form.connection.id_for_label }}" class="form-label">{{ form.connection.label }}</label>
+      {{ form.connection }}
+      {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <!-- ── Table selector (S-04/S-05) ── -->
+    <div class="form-section-label">
+      Target table
+      <span id="schema-spinner" class="schema-spinner" style="margin-left:6px"></span>
+    </div>
+
+    <!-- Table browser — shown when connection selected -->
+    <div id="table-browser" style="display:none; margin-bottom: 1rem;">
+      <div class="schema-browser">
+        <div class="schema-browser-header">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 4h8" stroke="currentColor" stroke-width="1"/></svg>
+          Tables
+        </div>
+        <div class="schema-list" id="table-list"></div>
+      </div>
+    </div>
+
+    <!-- Manual fallback / always-visible text inputs -->
+    <div class="row g-3 mb-4" id="table-inputs">
       <div class="col-6">
         <label for="{{ form.schema_name.id_for_label }}" class="form-label">{{ form.schema_name.label }}</label>
         {{ form.schema_name }}
-        {% if form.schema_name.errors %}
-          <div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>
-        {% endif %}
+        {% if form.schema_name.errors %}<div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>{% endif %}
       </div>
       <div class="col-6">
         <label for="{{ form.table_name.id_for_label }}" class="form-label">{{ form.table_name.label }}</label>
         {{ form.table_name }}
-        {% if form.table_name.errors %}
-          <div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>
-        {% endif %}
+        {% if form.table_name.errors %}<div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>{% endif %}
       </div>
     </div>
 
+    <!-- ── Monitoring conditions ── -->
     <div class="form-section-label">Monitoring conditions</div>
 
-    <!-- Volume -->
     <div class="mb-4">
       <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
-        {{ form.min_row_count.label }}
-        <span class="optional-tag">optional</span>
+        {{ form.min_row_count.label }}<span class="optional-tag">optional</span>
       </label>
       {{ form.min_row_count }}
       {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
-      {% if form.min_row_count.errors %}
-        <div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>
-      {% endif %}
+      {% if form.min_row_count.errors %}<div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <!-- Freshness: col + max_age in grid -->
     <div class="row g-3 mb-4">
       <div class="col-7">
         <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
-          {{ form.timestamp_column.label }}
-          <span class="optional-tag">optional</span>
+          {{ form.timestamp_column.label }}<span class="optional-tag">optional</span>
         </label>
+        <!-- Column browser -->
+        <div id="column-browser" style="display:none; margin-bottom:6px;">
+          <div class="schema-browser">
+            <div class="schema-browser-header">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="4.4" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="6.8" width="5" height="1.2" rx=".5" fill="currentColor"/></svg>
+              Timestamp columns
+              <span id="col-spinner" class="schema-spinner"></span>
+            </div>
+            <div class="schema-list" id="column-list"></div>
+          </div>
+        </div>
         {{ form.timestamp_column }}
         {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
-        {% if form.timestamp_column.errors %}
-          <div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>
-        {% endif %}
+        {% if form.timestamp_column.errors %}<div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>{% endif %}
       </div>
       <div class="col-5">
         <label for="{{ form.max_age_hours.id_for_label }}" class="form-label">{{ form.max_age_hours.label }}</label>
         {{ form.max_age_hours }}
-        {% if form.max_age_hours.errors %}
-          <div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>
-        {% endif %}
+        {% if form.max_age_hours.errors %}<div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>{% endif %}
       </div>
     </div>
 
+    <!-- ── Schedule ── -->
     <div class="form-section-label">Schedule</div>
-
     <div class="mb-4">
       <label for="{{ form.schedule_time.id_for_label }}" class="form-label">
-        {{ form.schedule_time.label }}
-        <span style="font-size:0.7rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);padding:1px 6px;border-radius:4px;margin-left:6px">optional</span>
+        {{ form.schedule_time.label }}<span class="optional-tag">optional</span>
       </label>
       {{ form.schedule_time }}
       {% if form.schedule_time.help_text %}<div class="form-text">{{ form.schedule_time.help_text }}</div>{% endif %}
@@ -152,4 +218,207 @@
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const connSelect   = document.getElementById('id_connection');
+  const schemaInput  = document.getElementById('id_schema_name');
+  const tableInput   = document.getElementById('id_table_name');
+  const colInput     = document.getElementById('id_timestamp_column');
+  const tableBrowser = document.getElementById('table-browser');
+  const tableList    = document.getElementById('table-list');
+  const colBrowser   = document.getElementById('column-browser');
+  const colList      = document.getElementById('column-list');
+  const schemaSpinner = document.getElementById('schema-spinner');
+  const colSpinner   = document.getElementById('col-spinner');
+
+  if (!connSelect) return;
+
+  let currentConnId   = null;
+  let currentSchema   = null;
+  let currentTable    = null;
+  let tablesCache     = {};  // connId -> [{schema, table}]
+  let columnsCache    = {};  // "connId:schema:table" -> [{name, type, is_timestamp}]
+
+  // ── Helpers ──────────────────────────────────────────────────────
+
+  function spin(el, on) { el.classList.toggle('active', on); }
+
+  function itemEl(icon, text, onClick) {
+    const el = document.createElement('div');
+    el.className = 'schema-item';
+    el.innerHTML = `<span class="schema-item-icon">${icon}</span><span>${text}</span>`;
+    el.addEventListener('click', onClick);
+    return el;
+  }
+
+  function errorEl(msg) {
+    const el = document.createElement('div');
+    el.className = 'schema-error';
+    el.innerHTML = `<span>⚠</span><span>${msg}</span>`;
+    return el;
+  }
+
+  // ── Load tables ────────────────────────────────────────────────────
+
+  function loadTables(connId) {
+    if (!connId) {
+      tableBrowser.style.display = 'none';
+      return;
+    }
+
+    currentConnId = connId;
+    tableBrowser.style.display = '';
+    tableList.innerHTML = '';
+    colBrowser.style.display = 'none';
+    spin(schemaSpinner, true);
+
+    if (tablesCache[connId]) {
+      renderTables(tablesCache[connId]);
+      spin(schemaSpinner, false);
+      return;
+    }
+
+    fetch(`/api/schema/${connId}/tables/`)
+      .then(r => r.json())
+      .then(data => {
+        spin(schemaSpinner, false);
+        if (data.error) {
+          tableList.appendChild(errorEl(data.error));
+          return;
+        }
+        tablesCache[connId] = data.tables;
+        renderTables(data.tables);
+      })
+      .catch(() => {
+        spin(schemaSpinner, false);
+        tableList.appendChild(errorEl('Failed to load tables.'));
+      });
+  }
+
+  function renderTables(tables) {
+    tableList.innerHTML = '';
+    if (!tables.length) {
+      tableList.appendChild(errorEl('No tables found.'));
+      return;
+    }
+
+    // Group by schema
+    const grouped = {};
+    tables.forEach(t => {
+      if (!grouped[t.schema]) grouped[t.schema] = [];
+      grouped[t.schema].push(t.table);
+    });
+
+    Object.entries(grouped).forEach(([schema, tbls]) => {
+      const header = document.createElement('div');
+      header.style.cssText = 'padding:4px 10px 2px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-faint)';
+      header.textContent = schema;
+      tableList.appendChild(header);
+
+      tbls.forEach(tbl => {
+        const el = itemEl('▦', `${tbl}`, () => selectTable(schema, tbl));
+        const fullName = `${schema}.${tbl}`;
+        if (schemaInput.value === schema && tableInput.value === tbl) {
+          el.classList.add('selected');
+        }
+        tableList.appendChild(el);
+      });
+    });
+  }
+
+  function selectTable(schema, table) {
+    schemaInput.value = schema;
+    tableInput.value  = table;
+    currentSchema     = schema;
+    currentTable      = table;
+
+    // Update selected state
+    tableList.querySelectorAll('.schema-item').forEach(el => el.classList.remove('selected'));
+    tableList.querySelectorAll('.schema-item').forEach(el => {
+      if (el.querySelector('span:last-child').textContent === table) {
+        el.classList.add('selected');
+      }
+    });
+
+    loadColumns(currentConnId, schema, table);
+  }
+
+  // ── Load columns ───────────────────────────────────────────────────
+
+  function loadColumns(connId, schema, table) {
+    colBrowser.style.display = '';
+    colList.innerHTML = '';
+    spin(colSpinner, true);
+
+    const cacheKey = `${connId}:${schema}:${table}`;
+    if (columnsCache[cacheKey]) {
+      renderColumns(columnsCache[cacheKey]);
+      spin(colSpinner, false);
+      return;
+    }
+
+    fetch(`/api/schema/${connId}/columns/${schema}/${table}/`)
+      .then(r => r.json())
+      .then(data => {
+        spin(colSpinner, false);
+        if (data.error) {
+          colList.appendChild(errorEl(data.error));
+          return;
+        }
+        columnsCache[cacheKey] = data.columns;
+        renderColumns(data.columns);
+      })
+      .catch(() => {
+        spin(colSpinner, false);
+        colList.appendChild(errorEl('Failed to load columns.'));
+      });
+  }
+
+  function renderColumns(columns) {
+    colList.innerHTML = '';
+    const tsCols = columns.filter(c => c.is_timestamp);
+
+    if (!tsCols.length) {
+      colList.appendChild(errorEl('No timestamp columns in this table.'));
+      return;
+    }
+
+    tsCols.forEach(col => {
+      const el = itemEl('⏱', `${col.name} <span style="color:var(--text-muted);font-size:0.68rem">${col.type}</span>`, () => {
+        colInput.value = col.name;
+        colList.querySelectorAll('.schema-item').forEach(e => e.classList.remove('selected'));
+        el.classList.add('selected');
+      });
+      if (colInput.value === col.name) el.classList.add('selected');
+      colList.appendChild(el);
+    });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────
+
+  connSelect.addEventListener('change', () => {
+    const connId = connSelect.value;
+    colBrowser.style.display = 'none';
+    loadTables(connId || null);
+  });
+
+  // On load — if connection already selected (edit mode)
+  const initialConn = connSelect.value;
+  if (initialConn) {
+    loadTables(initialConn);
+    // If schema+table already set, load columns too
+    const initialSchema = schemaInput.value;
+    const initialTable  = tableInput.value;
+    if (initialSchema && initialTable) {
+      currentSchema = initialSchema;
+      currentTable  = initialTable;
+      // Defer until tables loaded
+      setTimeout(() => loadColumns(initialConn, initialSchema, initialTable), 600);
+    }
+  }
+}());
+</script>
 {% endblock %}
