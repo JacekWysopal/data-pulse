@@ -69,7 +69,8 @@ def run_single(request, rule_id):
     return redirect('monitor:dashboard')
 
 
-
+@login_required
+def rule_history(request, rule_id):
     rule = get_object_or_404(Rule, pk=rule_id)
     results = rule.results.select_related('run').order_by('-checked_at')[:20]
     return render(request, 'monitor/rule_history.html', {'rule': rule, 'results': results})
