@@ -47,7 +47,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         created = 0
 
-        # 1. Utwórz reguły
+        # 1. Utwórz / zaktualizuj reguły
         rule_objs = []
         for name, schema, table, ts_col, max_age, min_rows in RULES:
             rule, new = Rule.objects.get_or_create(
@@ -60,6 +60,14 @@ class Command(BaseCommand):
                     min_row_count=min_rows,
                 )
             )
+            # Update schema/table in case old rule had wrong values
+            if not new and (rule.schema_name != schema or rule.table_name != table):
+                rule.schema_name = schema
+                rule.table_name = table
+                rule.timestamp_column = ts_col or ''
+                rule.max_age_hours = max_age
+                rule.min_row_count = min_rows
+                rule.save()
             if new:
                 created += 1
             rule_objs.append(rule)

@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% block title_suffix %} — History: {{ rule.name }}{% endblock %}
 {% block breadcrumb %}<span class="dp-breadcrumb-sep">›</span><a href="{% url 'monitor:dashboard' %}" style="color:var(--text-muted)">Dashboard</a><span class="dp-breadcrumb-sep">›</span><span class="dp-breadcrumb-current">{{ rule.name }}</span>{% endblock %}
 
 {% block extra_head %}

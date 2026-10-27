@@ -43,13 +43,7 @@ def dashboard(request):
 @login_required
 def run_checks(request):
     if request.method == 'POST':
-        run = run_all_checks()
-        if run.error_count:
-            messages.warning(request, f'Run complete: {run.ok_count} OK, {run.fail_count} FAIL, {run.error_count} ERROR.')
-        elif run.fail_count:
-            messages.warning(request, f'Run complete: {run.ok_count} OK, {run.fail_count} FAIL.')
-        else:
-            messages.success(request, f'Run complete: {run.ok_count} OK — all rules passed.')
+        run_all_checks()
     return redirect('monitor:dashboard')
 
 

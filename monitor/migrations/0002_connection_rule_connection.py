@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=200, unique=True)),
                 ('description', models.CharField(blank=True, max_length=500)),
-                ('database_url', models.TextField(db_column='database_url')),
+                ('_database_url', models.TextField(db_column='database_url')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],

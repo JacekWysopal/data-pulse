@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% block title_suffix %} — {{ action }}{% endblock %}
 {% block breadcrumb %}<span class="dp-breadcrumb-sep">›</span><a href="{% url 'monitor:dashboard' %}" style="color:var(--text-muted)">Dashboard</a><span class="dp-breadcrumb-sep">›</span><span class="dp-breadcrumb-current">{{ action }}</span>{% endblock %}
 
 {% block extra_head %}
