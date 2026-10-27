@@ -145,6 +145,110 @@
   .actions-cell { opacity: 0; transition: opacity 0.15s; }
   tr:hover .actions-cell { opacity: 1; }
 
+  /* ── S-08: Connection badge ── */
+  .conn-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 5px;
+    font-size: 0.7rem; font-weight: 600;
+    border: 1px solid;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .conn-badge-named {
+    color: #4d9fcc;
+    background: rgba(51,103,145,0.1);
+    border-color: rgba(51,103,145,0.25);
+  }
+  .conn-badge-named:hover {
+    background: rgba(51,103,145,0.2);
+    border-color: rgba(77,159,204,0.5);
+  }
+  .conn-badge-env {
+    color: var(--text-muted);
+    background: transparent;
+    border-color: var(--border-strong);
+  }
+  .conn-badge-env:hover {
+    color: var(--text-secondary);
+    border-color: var(--border-focus);
+  }
+
+  /* ── S-07: Filter bar ── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .filter-bar-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .filter-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  .filter-input:focus { border-color: var(--border-focus); }
+  .filter-input::placeholder { color: var(--text-muted); }
+  .filter-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .filter-select:focus { border-color: var(--border-focus); }
+  .filter-active-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 2px;
+  }
+  .filter-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .filter-clear:hover { color: var(--fail); }
+  .no-results {
+    text-align: center;
+    padding: 2.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: none;
+  }
+
   .run-bar {
     display: flex; align-items: center; gap: 0.6rem;
     padding: 0.6rem 1.25rem;
@@ -285,11 +389,36 @@
   {% endif %}
 
   {% if rule_status %}
+
+  <!-- S-07: Filter bar -->
+  <div class="filter-bar" id="filter-bar">
+    <span class="filter-bar-label">Filter</span>
+
+    <input type="text" class="filter-input" id="f-name" placeholder="Search rules…" style="width:160px">
+
+    <select class="filter-select" id="f-status">
+      <option value="">All statuses</option>
+      <option value="OK">✓ OK</option>
+      <option value="FAIL">✗ FAIL</option>
+      <option value="ERROR">⚠ ERROR</option>
+      <option value="NEVER_RUN">— No data</option>
+    </select>
+
+    <select class="filter-select" id="f-conn">
+      <option value="">All connections</option>
+      <option value="__env__">env (default)</option>
+      {% for item in rule_status %}{% if item.rule.connection %}{% ifchanged item.rule.connection.pk %}<option value="{{ item.rule.connection.pk }}">{{ item.rule.connection.name }}</option>{% endifchanged %}{% endif %}{% endfor %}
+    </select>
+
+    <button class="filter-clear" id="f-clear" style="display:none">✕ Clear</button>
+    <span class="filter-active-count" id="f-count" style="display:none">0</span>
+  </div>
   <div style="overflow-x:auto">
     <table class="dp-table">
       <thead>
         <tr>
           <th>Rule</th>
+          <th>Source</th>
           <th>Table</th>
           <th>Conditions</th>
           <th>Schedule</th>
@@ -300,13 +429,30 @@
       </thead>
       <tbody>
         {% for item in rule_status %}
-        <tr class="{% if item.status == 'OK' %}row-ok{% elif item.status == 'FAIL' %}row-fail{% elif item.status == 'ERROR' %}row-error{% endif %}">
+        <tr class="{% if item.status == 'OK' %}row-ok{% elif item.status == 'FAIL' %}row-fail{% elif item.status == 'ERROR' %}row-error{% endif %}"
+            data-name="{{ item.rule.name|lower }}"
+            data-status="{{ item.status }}"
+            data-conn="{% if item.rule.connection %}{{ item.rule.connection.pk }}{% else %}__env__{% endif %}">
 
           <td>
             <a href="{% url 'monitor:rule_history' item.rule.pk %}" class="rule-link">
               <span class="rule-link-dot"></span>
               {{ item.rule.name }}
             </a>
+          </td>
+
+          <!-- S-08: connection badge -->
+          <td>
+            {% if item.rule.connection %}
+              <span class="conn-badge conn-badge-named" onclick="filterByConn('{{ item.rule.connection.pk }}')" title="{{ item.rule.connection.masked_url }}">
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><ellipse cx="4.5" cy="2.2" rx="2.8" ry="1" stroke="currentColor" stroke-width="1"/><path d="M1.7 2.2v4.6c0 .6 1.3 1 2.8 1s2.8-.4 2.8-1V2.2" stroke="currentColor" stroke-width="1"/></svg>
+                {{ item.rule.connection.name }}
+              </span>
+            {% else %}
+              <span class="conn-badge conn-badge-env" onclick="filterByConn('__env__')" title="Using MONITORED_DATABASE_URL from environment">
+                env
+              </span>
+            {% endif %}
           </td>
 
           <td><code>{{ item.rule.schema_name }}.{{ item.rule.table_name }}</code></td>
@@ -380,6 +526,12 @@
 
         </tr>
         {% endfor %}
+        <!-- no-results row -->
+        <tr id="no-results-row" style="display:none">
+          <td colspan="8" class="no-results" style="display:table-cell;text-align:center;padding:2rem;color:var(--text-muted)">
+            No rules match the current filters.
+          </td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -398,4 +550,76 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// S-07: Client-side filtering with URL param persistence
+(function() {
+  const rows      = Array.from(document.querySelectorAll('tbody tr[data-name]'));
+  const fName     = document.getElementById('f-name');
+  const fStatus   = document.getElementById('f-status');
+  const fConn     = document.getElementById('f-conn');
+  const fClear    = document.getElementById('f-clear');
+  const fCount    = document.getElementById('f-count');
+  const noResults = document.getElementById('no-results-row');
+
+  if (!fName) return;
+
+  // Restore from URL params
+  const params = new URLSearchParams(location.search);
+  if (params.get('q'))      fName.value   = params.get('q');
+  if (params.get('status')) fStatus.value = params.get('status');
+  if (params.get('conn'))   fConn.value   = params.get('conn');
+
+  function applyFilters() {
+    const q      = fName.value.trim().toLowerCase();
+    const status = fStatus.value;
+    const conn   = fConn.value;
+    let visible  = 0;
+
+    rows.forEach(row => {
+      const nameMatch   = !q      || row.dataset.name.includes(q);
+      const statusMatch = !status || row.dataset.status === status;
+      const connMatch   = !conn   || row.dataset.conn === conn;
+      const show = nameMatch && statusMatch && connMatch;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.style.display = visible === 0 ? '' : 'none';
+
+    // Active count badge
+    const active = [q, status, conn].filter(Boolean).length;
+    fCount.textContent = active;
+    fCount.style.display = active > 0 ? '' : 'none';
+    fClear.style.display = active > 0 ? '' : 'none';
+
+    // Persist in URL
+    const p = new URLSearchParams();
+    if (q)      p.set('q', q);
+    if (status) p.set('status', status);
+    if (conn)   p.set('conn', conn);
+    const newUrl = p.toString() ? '?' + p.toString() : location.pathname;
+    history.replaceState(null, '', newUrl);
+  }
+
+  fName.addEventListener('input', applyFilters);
+  fStatus.addEventListener('change', applyFilters);
+  fConn.addEventListener('change', applyFilters);
+  fClear.addEventListener('click', () => {
+    fName.value = fStatus.value = fConn.value = '';
+    applyFilters();
+  });
+
+  // S-08: badge click filters by connection
+  window.filterByConn = function(connId) {
+    fConn.value = connId;
+    applyFilters();
+    document.getElementById('filter-bar').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  applyFilters();
+}());
+</script>
 {% endblock %}
