@@ -406,7 +406,6 @@
 
     <select class="filter-select" id="f-conn">
       <option value="">All connections</option>
-      <option value="__env__">env (default)</option>
       {% for item in rule_status %}{% if item.rule.connection %}{% ifchanged item.rule.connection.pk %}<option value="{{ item.rule.connection.pk }}">{{ item.rule.connection.name }}</option>{% endifchanged %}{% endif %}{% endfor %}
     </select>
 

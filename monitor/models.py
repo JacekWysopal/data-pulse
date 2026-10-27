@@ -81,7 +81,7 @@ class Rule(models.Model):
         null=True, blank=True,
         related_name='rules',
         verbose_name='Connection',
-        help_text='Leave empty to use the default MONITORED_DATABASE_URL from environment.',
+        help_text='Select a connection. Rules without a connection will return ERROR.',
     )
 
     rule_type = models.CharField(

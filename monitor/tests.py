@@ -359,10 +359,10 @@ class RunAllChecksTest(TestCase):
         cursor.fetchone.return_value = (10,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        make_rule(min_rows=5)
+        conn = make_connection()
+        make_rule(min_rows=5, connection=conn)
         from .services import run_all_checks
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            run = run_all_checks()
+        run = run_all_checks()
 
         self.assertIsNotNone(run.pk)
         self.assertIsNotNone(run.finished_at)
@@ -375,13 +375,13 @@ class RunAllChecksTest(TestCase):
         cursor.fetchone.return_value = (50,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        make_rule(name='r1', min_rows=10)
-        make_rule(name='r2', min_rows=20)
-        make_rule(name='r3', min_rows=30)
+        conn = make_connection()
+        make_rule(name='r1', min_rows=10, connection=conn)
+        make_rule(name='r2', min_rows=20, connection=conn)
+        make_rule(name='r3', min_rows=30, connection=conn)
 
         from .services import run_all_checks
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            run = run_all_checks()
+        run = run_all_checks()
 
         self.assertEqual(run.results.count(), 3)
 
@@ -390,21 +390,23 @@ class RunAllChecksTest(TestCase):
         import psycopg2
         mock_connect.side_effect = psycopg2.OperationalError('refused')
 
-        make_rule(name='r1', min_rows=1)
-        make_rule(name='r2', min_rows=1)
+        conn = make_connection()
+        make_rule(name='r1', min_rows=1, connection=conn)
+        make_rule(name='r2', min_rows=1, connection=conn)
 
         from .services import run_all_checks
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            run = run_all_checks()
+        run = run_all_checks()
 
         self.assertEqual(run.results.filter(status='ERROR').count(), 2)
 
-    def test_no_url_marks_rules_error(self):
-        make_rule(name='r1', min_rows=1)
+    def test_no_connection_marks_rules_error(self):
+        make_rule(name='r1', min_rows=1)  # no connection
         from .services import run_all_checks
-        with self.settings(MONITORED_DATABASE_URL=None):
-            run = run_all_checks()
-        self.assertEqual(run.results.filter(status='ERROR').count(), 1)
+        run = run_all_checks()
+        result = run.results.first()
+        self.assertEqual(result.status, 'ERROR')
+        self.assertIn('No connection', result.error_message)
+
 
     @patch('monitor.services.psycopg2.connect')
     def test_one_rule_error_does_not_stop_others(self, mock_connect):
@@ -452,10 +454,10 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (5,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        rule = make_rule(min_rows=1)
+        conn = make_connection()
+        rule = make_rule(min_rows=1, connection=conn)
         from .services import run_single_rule
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            result = run_single_rule(rule)
+        result = run_single_rule(rule)
 
         self.assertEqual(result.rule, rule)
         self.assertIn(result.status, ['OK', 'FAIL', 'ERROR'])
@@ -468,10 +470,10 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (100,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        rule = make_rule(min_rows=50)
+        conn = make_connection()
+        rule = make_rule(min_rows=50, connection=conn)
         from .services import run_single_rule
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            result = run_single_rule(rule)
+        result = run_single_rule(rule)
         self.assertEqual(result.status, 'OK')
 
     @patch('monitor.services.psycopg2.connect')
@@ -482,11 +484,18 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (3,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        rule = make_rule(min_rows=100)
+        conn = make_connection()
+        rule = make_rule(min_rows=100, connection=conn)
         from .services import run_single_rule
-        with self.settings(MONITORED_DATABASE_URL='postgresql://u:p@h/db'):
-            result = run_single_rule(rule)
+        result = run_single_rule(rule)
         self.assertEqual(result.status, 'FAIL')
+
+    def test_no_connection_returns_error(self):
+        rule = make_rule(min_rows=1)  # no connection
+        from .services import run_single_rule
+        result = run_single_rule(rule)
+        self.assertEqual(result.status, 'ERROR')
+        self.assertIn('No connection', result.error_message)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -680,17 +689,21 @@ class RuleCRUDViewTest(TestCase):
         self.assertContains(r, 'Save rule')
 
     def test_rule_create_post_volume(self):
+        conn = make_connection()
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'new_rule', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 50, 'rule_type': 'volume_freshness',
+            'connection': conn.pk,
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         self.assertTrue(Rule.objects.filter(name='new_rule').exists())
 
     def test_rule_create_post_custom_sql(self):
+        conn = make_connection()
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'sql_rule', 'rule_type': 'custom_sql',
             'custom_sql': 'SELECT true',
+            'connection': conn.pk,
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         rule = Rule.objects.get(name='sql_rule')
@@ -711,10 +724,12 @@ class RuleCRUDViewTest(TestCase):
         self.assertContains(r, rule.name)
 
     def test_rule_edit_post(self):
-        rule = make_rule(name='old_name', min_rows=1)
+        conn = make_connection()
+        rule = make_rule(name='old_name', min_rows=1, connection=conn)
         r = self.client.post(reverse('monitor:rule_edit', args=[rule.pk]), {
             'name': 'new_name', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 100, 'rule_type': 'volume_freshness',
+            'connection': conn.pk,
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         rule.refresh_from_db()

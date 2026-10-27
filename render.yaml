@@ -8,8 +8,6 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: MONITORED_DATABASE_URL
-        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG

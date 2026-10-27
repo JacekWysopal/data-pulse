@@ -53,8 +53,8 @@ class RuleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['connection'].required = False
-        self.fields['connection'].empty_label = '— Default (env MONITORED_DATABASE_URL)'
+        self.fields['connection'].required = True
+        self.fields['connection'].empty_label = '— Select a connection —'
 
     def clean(self):
         cleaned = super().clean()

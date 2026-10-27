@@ -74,7 +74,7 @@ else:
 
 # Connection string do monitorowanej bazy PostgreSQL uÅ¼ytkownika
 # Czytany z .env, nigdy nie trafia do UI ani logÃ³w
-MONITORED_DATABASE_URL = env('MONITORED_DATABASE_URL', default=None)
+# MONITORED_DATABASE_URL removed — connections managed via UI (Connection model)
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

@@ -1,14 +1,13 @@
 """
 DataPulse domain logic.
 Connects to monitored PostgreSQL and evaluates rules.
-Connection string comes from rule.connection (UI-managed) or
-falls back to settings.MONITORED_DATABASE_URL.
+Connection string comes exclusively from rule.connection (UI-managed).
+Rules without a Connection assigned will return ERROR status.
 """
 
 import re
 
 import psycopg2
-from django.conf import settings
 from django.utils import timezone
 
 from .models import CheckRun, Connection, Rule, RuleResult
@@ -216,35 +215,38 @@ def run_single_rule(rule: Rule) -> RuleResult:
     """Run one rule and return its RuleResult (inside a fresh CheckRun)."""
     run = CheckRun.objects.create()
     try:
-        if rule.connection_id:
-            url = rule.connection.get_database_url()
-        else:
-            url = settings.MONITORED_DATABASE_URL
-
-        if not url:
+        if not rule.connection_id:
             result = RuleResult.objects.create(
                 run=run, rule=rule,
                 status=RuleResult.Status.ERROR,
-                error_message='No database URL configured for this rule.',
+                error_message='No connection assigned. Add a Connection in the Connections page and assign it to this rule.',
             )
         else:
-            try:
-                conn = psycopg2.connect(url)
-                data = _check_rule(conn, rule)
-                conn.close()
-                result = RuleResult.objects.create(
-                    run=run, rule=rule,
-                    status=data['status'],
-                    row_count=data['row_count'],
-                    last_record_age_hours=data['last_record_age_hours'],
-                    error_message=data['error_message'],
-                )
-            except psycopg2.OperationalError as e:
+            url = rule.connection.get_database_url()
+            if not url:
                 result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
-                    error_message=str(e),
+                    error_message='Connection URL is empty. Edit the connection and provide a valid database URL.',
                 )
+            else:
+                try:
+                    conn = psycopg2.connect(url)
+                    data = _check_rule(conn, rule)
+                    conn.close()
+                    result = RuleResult.objects.create(
+                        run=run, rule=rule,
+                        status=data['status'],
+                        row_count=data['row_count'],
+                        last_record_age_hours=data['last_record_age_hours'],
+                        error_message=data['error_message'],
+                    )
+                except psycopg2.OperationalError as e:
+                    result = RuleResult.objects.create(
+                        run=run, rule=rule,
+                        status=RuleResult.Status.ERROR,
+                        error_message=str(e),
+                    )
     except Exception as e:
         result = RuleResult.objects.create(
             run=run, rule=rule,
@@ -261,30 +263,41 @@ def run_all_checks() -> CheckRun:
     run = CheckRun.objects.create()
     rules = Rule.objects.select_related('connection').all()
 
-    # Group rules by connection URL to reuse connections
-    conn_cache: dict[str | None, tuple] = {}  # url -> (conn, error)
+    # Cache open connections by URL to avoid duplicate connections per run
+    conn_cache: dict[str, tuple] = {}  # url -> (conn, error_msg)
 
     for rule in rules:
         try:
-            if rule.connection_id:
-                url = rule.connection.get_database_url()
-            else:
-                url = settings.MONITORED_DATABASE_URL
+            if not rule.connection_id:
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message='No connection assigned. Add a Connection and assign it to this rule.',
+                )
+                continue
+
+            url = rule.connection.get_database_url()
+            if not url:
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message='Connection URL is empty.',
+                )
+                continue
 
             if url not in conn_cache:
                 try:
-                    conn_cache[url] = (psycopg2.connect(url) if url else None, None)
+                    conn_cache[url] = (psycopg2.connect(url), None)
                 except psycopg2.OperationalError as e:
                     conn_cache[url] = (None, str(e))
 
             conn, conn_error = conn_cache[url]
 
             if conn_error or conn is None:
-                msg = conn_error or 'No database URL configured for this rule.'
                 RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
-                    error_message=msg,
+                    error_message=conn_error or 'Connection failed.',
                 )
             else:
                 result = _check_rule(conn, rule)
