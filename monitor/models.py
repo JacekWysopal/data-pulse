@@ -99,6 +99,14 @@ class Rule(models.Model):
         verbose_name='Min row count',
     )
 
+    # Schedule — optional HH:MM UTC, run by cron
+    schedule_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name='Schedule time (UTC)',
+        help_text='Daily run time in UTC, e.g. 06:00. Leave empty to run manually only.',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

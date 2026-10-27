@@ -10,6 +10,7 @@ urlpatterns = [
     # Rules
     path('rules/new/', views.rule_create, name='rule_create'),
     path('rules/<int:rule_id>/', views.rule_history, name='rule_history'),
+    path('rules/<int:rule_id>/run/', views.run_single, name='run_single'),
     path('rules/<int:rule_id>/edit/', views.rule_edit, name='rule_edit'),
     path('rules/<int:rule_id>/delete/', views.rule_delete, name='rule_delete'),
 

@@ -74,11 +74,52 @@ def _check_rule(conn, rule: Rule) -> dict:
     return result
 
 
+def run_single_rule(rule: Rule) -> RuleResult:
+    """Run one rule and return its RuleResult (inside a fresh CheckRun)."""
+    run = CheckRun.objects.create()
+    try:
+        if rule.connection_id:
+            url = rule.connection.get_database_url()
+        else:
+            url = settings.MONITORED_DATABASE_URL
+
+        if not url:
+            result = RuleResult.objects.create(
+                run=run, rule=rule,
+                status=RuleResult.Status.ERROR,
+                error_message='No database URL configured for this rule.',
+            )
+        else:
+            try:
+                conn = psycopg2.connect(url)
+                data = _check_rule(conn, rule)
+                conn.close()
+                result = RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=data['status'],
+                    row_count=data['row_count'],
+                    last_record_age_hours=data['last_record_age_hours'],
+                    error_message=data['error_message'],
+                )
+            except psycopg2.OperationalError as e:
+                result = RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message=str(e),
+                )
+    except Exception as e:
+        result = RuleResult.objects.create(
+            run=run, rule=rule,
+            status=RuleResult.Status.ERROR,
+            error_message=str(e),
+        )
+
+    run.finished_at = timezone.now()
+    run.save()
+    return result
+
+
 def run_all_checks() -> CheckRun:
-    """
-    Run all rules. Always returns a CheckRun.
-    Each rule uses its own connection — errors are recorded per rule.
-    """
     run = CheckRun.objects.create()
     rules = Rule.objects.select_related('connection').all()
 

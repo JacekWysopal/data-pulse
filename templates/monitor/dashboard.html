@@ -293,6 +293,7 @@
           <th>Rule</th>
           <th>Table</th>
           <th>Conditions</th>
+          <th>Schedule</th>
           <th>Status</th>
           <th>Measured values</th>
           <th></th>
@@ -317,6 +318,17 @@
             {% endif %}
             {% if item.rule.timestamp_column %}
               <span class="cond-pill">{{ item.rule.timestamp_column }} ≤ {{ item.rule.max_age_hours }}h</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if item.rule.schedule_time %}
+              <span class="cond-pill" style="color:var(--accent-hover);border-color:rgba(99,102,241,0.25);background:var(--accent-dim)">
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.8" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 2.5v2l1.2 1" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+                {{ item.rule.schedule_time|time:"H:i" }} UTC
+              </span>
+            {% else %}
+              <span style="color:var(--text-faint);font-size:0.75rem">—</span>
             {% endif %}
           </td>
 
@@ -355,7 +367,13 @@
           </td>
 
           <td class="actions-cell">
-            <div style="display:flex;gap:4px;justify-content:flex-end">
+            <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
+              <form method="post" action="{% url 'monitor:run_single' item.rule.pk %}" style="margin:0">
+                {% csrf_token %}
+                <button type="submit" class="btn-dp btn-dp-ghost btn-dp-xs" title="Run this rule" style="color:var(--ok);border-color:rgba(52,211,153,0.25)">
+                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M2 1l6 3.5L2 8V1z" fill="currentColor"/></svg>
+                </button>
+              </form>
               <a href="{% url 'monitor:rule_edit' item.rule.pk %}" class="btn-dp btn-dp-ghost btn-dp-xs">Edit</a>
               <a href="{% url 'monitor:rule_delete' item.rule.pk %}" class="btn-dp btn-dp-danger btn-dp-xs">Delete</a>
             </div>

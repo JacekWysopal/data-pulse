@@ -32,7 +32,7 @@ class ConnectionForm(forms.ModelForm):
 class RuleForm(forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ['name', 'schema_name', 'table_name', 'connection', 'timestamp_column', 'max_age_hours', 'min_row_count']
+        fields = ['name', 'schema_name', 'table_name', 'connection', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_time']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'schema_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'public'}),
@@ -41,6 +41,7 @@ class RuleForm(forms.ModelForm):
             'timestamp_column': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'updated_at'}),
             'max_age_hours': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
             'min_row_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
+            'schedule_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}, format='%H:%M'),
         }
 
     def __init__(self, *args, **kwargs):

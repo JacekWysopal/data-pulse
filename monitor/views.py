@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ConnectionForm, RuleForm
 from .models import CheckRun, Connection, Rule, RuleResult
-from .services import run_all_checks
+from .services import run_all_checks, run_single_rule
 
 
 # ── Dashboard ────────────────────────────────────────────────
@@ -56,7 +56,20 @@ def run_checks(request):
 # ── Rules ─────────────────────────────────────────────────────
 
 @login_required
-def rule_history(request, rule_id):
+def run_single(request, rule_id):
+    rule = get_object_or_404(Rule, pk=rule_id)
+    if request.method == 'POST':
+        result = run_single_rule(rule)
+        if result.status == 'OK':
+            messages.success(request, f'✓ {rule.name}: OK')
+        elif result.status == 'FAIL':
+            messages.warning(request, f'✗ {rule.name}: FAIL')
+        else:
+            messages.warning(request, f'⚠ {rule.name}: ERROR — {result.error_message[:80]}')
+    return redirect('monitor:dashboard')
+
+
+
     rule = get_object_or_404(Rule, pk=rule_id)
     results = rule.results.select_related('run').order_by('-checked_at')[:20]
     return render(request, 'monitor/rule_history.html', {'rule': rule, 'results': results})
