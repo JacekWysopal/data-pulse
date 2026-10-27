@@ -109,7 +109,8 @@ def get_schema_columns(conn_id: int, schema: str, table: str) -> dict:
         conn.close()
 
 
-def _check_volume_freshness(conn, rule: Rule) -> dict:
+def _check_rule(conn, rule: Rule) -> dict:
+    """Dispatch to the correct check based on rule type."""
     if rule.rule_type == Rule.RuleType.CUSTOM_SQL:
         return _check_custom_sql(conn, rule)
     return _check_volume_freshness(conn, rule)
