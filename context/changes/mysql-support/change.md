@@ -1,7 +1,7 @@
 ---
 change_id: mysql-support
 title: MySQL support — add MySQL as a monitored database provider
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

@@ -3,7 +3,6 @@ project: DataPulse
 prd_version: 1
 updated: 2026-10-28
 milestone_seq: 1
-milestone_id: m-01-first-deploy
 milestone_status: done
 main_goal: speed
 north_star: S-01
@@ -324,11 +323,11 @@ Slack jako „Soon” w UI.
 
 | ID | Slice | Prereqs | Status |
 |---|---|---|---|
-| S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | new |
-| S-13 | Email notifications — alert na FAIL | S-12 | new |
-| S-14 | MySQL support — MySQL jako monitored DB provider | — | new |
-| S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | new |
-| S-16 | Slack notifications — Soon badge w UI + model stub | — | new |
+| S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | planning |
+| S-13 | Email notifications — alert na FAIL | S-12 | planning |
+| S-14 | MySQL support — MySQL jako monitored DB provider | — | planning |
+| S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | planning |
+| S-16 | Slack notifications — Soon badge w UI + model stub | — | planning |
 
 ---
 
@@ -350,11 +349,7 @@ Logowanie jest bezpieczne (HTTPS, CSRF, hasło hashowane).
 - Rejestracja: prosty signup bez email verification (MVP) vs. z weryfikacją
 - Migracja istniejących reguł/połączeń — przypisanie do pierwszego superusera
 
-**Status:** new
-
----
-
-### S-13 — Email notifications
+**Status:** planning
 
 **Wynik:** Po uruchomieniu sprawdzenia, jeśli reguła zwraca FAIL lub ERROR,
 właściciel reguły dostaje email z nazwą reguły, statusem i zmierzoną wartością.
@@ -369,7 +364,7 @@ właściciel reguły dostaje email z nazwą reguły, statusem i zmierzoną warto
 - Cooldown: nie wysyłać jeśli poprzedni email < 1h temu
 - Szablon email: HTML vs. plain text
 
-**Status:** new
+**Status:** planning
 
 ---
 
@@ -388,7 +383,7 @@ Reguły volume i freshness działają na MySQL tak samo jak na PostgreSQL.
 - Aiven — 30-dniowy trial
 - db4free.net — prosty free MySQL hosting
 
-**Status:** new
+**Status:** planning
 
 ---
 
@@ -407,7 +402,7 @@ Każda opcja ma czytelny opis w UI.
 - Render Cron Job: jeden job co minutę (run_scheduled) vs. kilka jobów
 - Walidacja cron expression w formularzu
 
-**Status:** new
+**Status:** planning
 
 ---
 
@@ -420,4 +415,4 @@ Model SlackNotification istnieje w bazie (gotowy do aktywacji).
 
 **Prereqs:** — (UI only + model stub)
 
-**Status:** new
+**Status:** planning
