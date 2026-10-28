@@ -10,7 +10,7 @@ dependencies = [
     "django-environ>=0.14.0",
     "croniter>=6.0.0",
     "psycopg2-binary>=2.9.13",
-    "pymysql==1.4.6",
+    "pymysql==1.2.3",
     "gunicorn>=23.0.0",
     "whitenoise>=6.9.0",
 ]
