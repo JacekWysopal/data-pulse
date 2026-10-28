@@ -1,9 +1,9 @@
 ---
 change_id: row-sampling
 title: Row-level sampling on failure — show example failing rows
-status: planned
+status: implemented
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 archived_at: null
 ---
 

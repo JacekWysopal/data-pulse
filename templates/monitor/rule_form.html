@@ -128,6 +128,55 @@
     display: none;
   }
   .schema-fallback-note.show { display: block; }
+  /* Template gallery — check-templates */
+  .tpl-gallery {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .tpl-card {
+    min-width: 130px;
+    max-width: 150px;
+    flex-shrink: 0;
+    cursor: pointer;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 10px 8px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .tpl-card:hover { border-color: var(--accent); }
+  .tpl-card.selected {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .tpl-card-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .tpl-card-desc {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+  .tpl-params {
+    margin-bottom: 12px;
+  }
+  .tpl-params label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+    display: block;
+  }
+  .tpl-params input[type="text"] {
+    width: 100%;
+    margin-bottom: 6px;
+  }
 </style>
 {% endblock %}
 
@@ -179,6 +228,15 @@
 
     <!-- S-06: Custom SQL section -->
     <div id="custom-sql-section" style="display:{% if form.rule_type.value == 'custom_sql' %}block{% else %}none{% endif %}">
+      <!-- Template gallery — check-templates -->
+      <div id="tpl-gallery-section" class="mb-3">
+        <div class="form-section-label">Templates <span class="optional-tag">optional</span></div>
+        <div id="tpl-gallery" class="tpl-gallery"><!-- cards injected by JS --></div>
+        <div id="tpl-params" class="tpl-params" style="display:none">
+          <!-- param inputs injected by JS -->
+          <button type="button" id="tpl-apply-btn" class="btn-dp btn-dp-primary" style="font-size:0.78rem;padding:5px 14px;margin-top:8px">Apply template</button>
+        </div>
+      </div>
       <div class="mb-4">
         <label for="{{ form.custom_sql.id_for_label }}" class="form-label">SQL query</label>
         <textarea id="{{ form.custom_sql.id_for_label }}" name="custom_sql"
@@ -302,7 +360,7 @@
 
     <!-- ── Notifications ── -->
     <div class="form-section-label">Notifications</div>
-    <div class="mb-4">
+    <div class="mb-3">
       <div class="form-check">
         {{ form.notify_on_fail }}
         <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
@@ -316,6 +374,24 @@
       </div>
       {% if form.notify_on_fail.errors %}
         <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
+    <div class="mb-4">
+      <div class="form-check">
+        {{ form.notify_slack }}
+        <label class="form-check-label" for="{{ form.notify_slack.id_for_label }}">
+          Notify via Slack
+        </label>
+      </div>
+      <div class="form-text" style="margin-top:4px">
+        Send a Slack Block Kit message when this rule returns FAIL or ERROR.
+        Requires at least one enabled webhook in
+        <a href="{% url 'monitor:slack_webhook_list' %}" style="color:var(--accent-hover)">Slack Webhooks</a>.
+        Cooldown: at most one message per hour per rule.
+      </div>
+      {% if form.notify_slack.errors %}
+        <div class="field-error">✗ {{ form.notify_slack.errors|join:", " }}</div>
       {% endif %}
     </div>
 
@@ -349,6 +425,11 @@
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => setType(tab.dataset.type));
+  });
+
+  // Allow external code (template gallery) to switch rule type via custom event
+  document.addEventListener('dp:setType', (e) => {
+    if (e.detail && e.detail.type) setType(e.detail.type);
   });
 }());
 
@@ -579,5 +660,126 @@
   // Init on page load (handles edit-mode re-render)
   updateScheduleUI();
 }());
+
+// check-templates: Template gallery
+(function() {
+  var selectedTpl = null;
+  var templatesCache = null;
+
+  var galleryEl   = document.getElementById('tpl-gallery');
+  var paramsEl    = document.getElementById('tpl-params');
+  var applyBtn    = document.getElementById('tpl-apply-btn');
+  var sqlTextarea = document.getElementById('id_custom_sql');
+
+  if (!galleryEl || !paramsEl || !applyBtn || !sqlTextarea) return;
+
+  // ── Provider resolution
+  function getProvider() {
+    var connSelect = document.getElementById('id_connection');
+    if (!connSelect || !connSelect.value) return 'postgresql';
+    var providersJson = connSelect.getAttribute('data-providers') || '{}';
+    try {
+      var providers = JSON.parse(providersJson);
+      return providers[connSelect.value] || 'postgresql';
+    } catch (e) {
+      return 'postgresql';
+    }
+  }
+
+  // ── Fetch templates
+  function fetchTemplates(cb) {
+    if (templatesCache) { cb(templatesCache); return; }
+    fetch('/api/templates/')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        templatesCache = data.templates || [];
+        cb(templatesCache);
+      })
+      .catch(function() {
+        galleryEl.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted)">Could not load templates.</span>';
+      });
+  }
+
+  // ── Render gallery cards
+  function renderGallery(templates) {
+    galleryEl.innerHTML = '';
+    templates.forEach(function(tpl) {
+      var card = document.createElement('div');
+      card.className = 'tpl-card';
+      card.innerHTML =
+        '<div class="tpl-card-label">' + tpl.label + '</div>' +
+        '<div class="tpl-card-desc">' + tpl.description + '</div>';
+      card.addEventListener('click', function() { selectCard(tpl, card); });
+      galleryEl.appendChild(card);
+    });
+  }
+
+  // ── Select a card
+  function selectCard(tpl, cardEl) {
+    galleryEl.querySelectorAll('.tpl-card').forEach(function(c) { c.classList.remove('selected'); });
+    cardEl.classList.add('selected');
+    selectedTpl = tpl;
+    renderParamForm(tpl);
+  }
+
+  // ── Render parameter sub-form
+  function renderParamForm(tpl) {
+    paramsEl.querySelectorAll('.tpl-param-row').forEach(function(el) { el.remove(); });
+    tpl.params.forEach(function(param) {
+      var row = document.createElement('div');
+      row.className = 'tpl-param-row';
+      var lbl = document.createElement('label');
+      lbl.textContent = param.label;
+      lbl.setAttribute('for', 'tpl-param-' + param.name);
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = 'tpl-param-' + param.name;
+      inp.className = 'form-control';
+      inp.placeholder = param.placeholder || '';
+      inp.style.marginBottom = '6px';
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      paramsEl.insertBefore(row, applyBtn);
+    });
+    paramsEl.style.display = 'block';
+  }
+
+  // ── Apply button
+  applyBtn.addEventListener('click', function() {
+    if (!selectedTpl) return;
+    var provider = getProvider();
+    var sqlPattern = selectedTpl.sql[provider] || selectedTpl.sql['postgresql'] || '';
+    var params = {};
+    selectedTpl.params.forEach(function(param) {
+      var inp = document.getElementById('tpl-param-' + param.name);
+      params[param.name] = inp ? inp.value : '';
+    });
+    var rendered = sqlPattern.replace(/\{(\w+)\}/g, function(_, key) {
+      return Object.prototype.hasOwnProperty.call(params, key) ? params[key] : '{' + key + '}';
+    });
+    sqlTextarea.value = rendered;
+    document.dispatchEvent(new CustomEvent('dp:setType', { detail: { type: 'custom_sql' } }));
+    paramsEl.style.display = 'none';
+    paramsEl.querySelectorAll('.tpl-param-row').forEach(function(el) { el.remove(); });
+    galleryEl.querySelectorAll('.tpl-card').forEach(function(c) { c.classList.remove('selected'); });
+    selectedTpl = null;
+  });
+
+  // ── Init
+  var customSqlSection = document.getElementById('custom-sql-section');
+  if (customSqlSection && customSqlSection.style.display !== 'none') {
+    fetchTemplates(renderGallery);
+  }
+  document.addEventListener('dp:setType', function(e) {
+    if (e.detail && e.detail.type === 'custom_sql') {
+      if (!templatesCache) {
+        fetchTemplates(renderGallery);
+      } else if (galleryEl.children.length === 0) {
+        renderGallery(templatesCache);
+      }
+    }
+  });
+}());
+
 </script>
 {% endblock %}

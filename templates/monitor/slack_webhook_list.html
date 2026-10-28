@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block breadcrumb %}<span class="dp-breadcrumb-sep">›</span><span class="dp-breadcrumb-current">Slack Webhooks</span>{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 animate-fadeup">
+  <div>
+    <h1 style="font-size:1.4rem;margin-bottom:0.25rem">Slack Webhooks</h1>
+    <p style="color:var(--text-muted);font-size:0.82rem;margin:0">Manage Incoming Webhook URLs for Slack notifications.</p>
+  </div>
+  <a href="{% url 'monitor:slack_webhook_create' %}" class="btn-dp btn-dp-primary">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    Add webhook
+  </a>
+</div>
+
+{% if webhooks %}
+<div class="d-flex flex-column gap-3">
+  {% for wh in webhooks %}
+  <div class="dp-card animate-fadeup" style="animation-delay:{{ forloop.counter0 }}00ms;padding:1.25rem 1.5rem">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <div style="flex:1;min-width:0">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+          <span style="font-size:1rem;font-weight:700">{{ wh.name }}</span>
+          {% if wh.enabled %}
+            <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 8px;border-radius:20px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399">Enabled</span>
+          {% else %}
+            <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 8px;border-radius:20px;background:var(--bg-elevated);border:1px solid var(--border-strong);color:var(--text-muted)">Disabled</span>
+          {% endif %}
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--text-muted);word-break:break-all">
+          {{ wh.url|truncatechars:60 }}
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.4rem">Added {{ wh.created_at|date:"Y-m-d" }}</div>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <a href="{% url 'monitor:slack_webhook_edit' wh.pk %}" class="btn-dp btn-dp-ghost btn-dp-sm">Edit</a>
+        <a href="{% url 'monitor:slack_webhook_delete' wh.pk %}" class="btn-dp btn-dp-danger btn-dp-sm">Delete</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="animate-fadeup animate-fadeup-1" style="text-align:center;padding:2rem;color:var(--text-muted)">
+  <div style="font-size:0.85rem">No webhooks yet — click <strong style="color:var(--text-secondary)">Add webhook</strong> to add one.</div>
+</div>
+{% endif %}
+
+{% endblock %}

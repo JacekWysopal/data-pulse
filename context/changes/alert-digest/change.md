@@ -1,9 +1,9 @@
 ---
 change_id: alert-digest
 title: Alert digest — group notifications, avoid alert fatigue
-status: planned
+status: implemented
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 archived_at: null
 ---
 

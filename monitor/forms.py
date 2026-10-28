@@ -1,7 +1,8 @@
+import json
 from croniter import croniter
 from django import forms
 
-from .models import Connection, Rule
+from .models import Connection, DbtIntegration, Rule, SlackWebhook
 
 
 class ConnectionForm(forms.ModelForm):
@@ -34,7 +35,7 @@ class ConnectionForm(forms.ModelForm):
 class RuleForm(forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail']
+        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail', 'notify_slack']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'schema_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'public'}),
@@ -57,6 +58,7 @@ class RuleForm(forms.ModelForm):
                 'id': 'id_schedule_cron',
             }),
             'notify_on_fail': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'notify_slack': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -66,6 +68,12 @@ class RuleForm(forms.ModelForm):
         self.fields['connection'].empty_label = '— Select a connection —'
         if user is not None:
             self.fields['connection'].queryset = Connection.objects.filter(user=user)
+        # Embed provider mapping for the template gallery JS
+        providers = {
+            str(c.pk): c.provider
+            for c in self.fields['connection'].queryset
+        }
+        self.fields['connection'].widget.attrs['data-providers'] = json.dumps(providers)
         self.fields['schedule_cron'].required = False
         self.fields['schedule_type'].required = False
         self.fields['schedule_type'].initial = 'disabled'
@@ -121,3 +129,48 @@ class RuleForm(forms.ModelForm):
                 )
 
         return cleaned
+
+
+class DbtIntegrationForm(forms.ModelForm):
+    """Form for creating / editing a DbtIntegration. Secret key is not a form field."""
+
+    class Meta:
+        model = DbtIntegration
+        fields = ['name', 'job_id', 'connection', 'rules']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. production dbt run',
+            }),
+            'job_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. 12345 (dbt Cloud) or my-project (dbt Core)',
+            }),
+            'connection': forms.Select(attrs={'class': 'form-select'}),
+            'rules': forms.SelectMultiple(attrs={'class': 'form-select', 'size': '8'}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['connection'].required = False
+        self.fields['connection'].empty_label = '\u2014 None (informational only) \u2014'
+        self.fields['rules'].required = False
+        if user is not None:
+            self.fields['connection'].queryset = Connection.objects.filter(user=user)
+            self.fields['rules'].queryset = Rule.objects.filter(user=user)
+
+
+class SlackWebhookForm(forms.ModelForm):
+    """Form for creating and editing SlackWebhook instances."""
+
+    class Meta:
+        model = SlackWebhook
+        fields = ['name', 'url', 'enabled']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. #alerts, #data-quality'}),
+            'url': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://hooks.slack.com/services/...',
+            }),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }

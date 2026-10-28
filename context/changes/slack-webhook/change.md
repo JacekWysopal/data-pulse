@@ -1,7 +1,7 @@
 ---
 change_id: slack-webhook
 title: Slack/Teams webhook notifications on FAIL/ERROR
-status: planned
+status: implemented
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

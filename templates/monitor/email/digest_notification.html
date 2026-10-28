@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DataPulse — Run Digest</title>
+</head>
+<body style="margin:0;padding:0;background:#0f1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#e2e8f0">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;padding:32px 16px">
+    <tr>
+      <td align="center">
+        <table width="580" cellpadding="0" cellspacing="0" border="0" style="background:#1a1d2e;border:1px solid #2d3148;border-radius:12px;overflow:hidden;max-width:580px;width:100%">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:24px 28px 20px;border-bottom:1px solid #2d3148">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6366f1">DataPulse</span>
+                  </td>
+                  <td align="right">
+                    <span style="display:inline-block;padding:3px 10px;border-radius:20px;background:#451a1a;color:#f87171;font-size:0.75rem;font-weight:700;letter-spacing:0.05em">DIGEST</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td style="padding:24px 28px 8px">
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:#f1f5f9">Run #{{ run.pk }} — {{ fail_count }} FAIL{% if error_count %}, {{ error_count }} ERROR{% endif %}</h1>
+              <p style="margin:6px 0 0;font-size:0.82rem;color:#94a3b8">Started {{ run.started_at|date:"Y-m-d H:i" }} UTC</p>
+            </td>
+          </tr>
+
+          <!-- Summary or table -->
+          <tr>
+            <td style="padding:16px 28px 24px">
+              {% if is_summary %}
+              <!-- Summary banner for 10+ failures -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;border:1px solid #2d3148;border-radius:8px;overflow:hidden">
+                <tr>
+                  <td style="padding:20px 20px;font-size:0.95rem;color:#f87171;font-weight:600;text-align:center">
+                    {{ fail_count }} rule(s) FAILED{% if error_count %}, {{ error_count }} ERROR{% endif %} — see dashboard for details.
+                  </td>
+                </tr>
+              </table>
+              {% else %}
+              <!-- Full failure table -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;border:1px solid #2d3148;border-radius:8px;overflow:hidden">
+                <!-- Column headers -->
+                <tr style="background:#161929">
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Rule</td>
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Status</td>
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Table</td>
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Rows</td>
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Age (h)</td>
+                  <td style="padding:8px 12px;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;border-bottom:1px solid #2d3148">Error</td>
+                </tr>
+                {% for result in failing_results %}
+                <tr style="border-bottom:1px solid #2d3148">
+                  <td style="padding:10px 12px;font-size:0.8rem;color:#e2e8f0;font-weight:600">{{ result.rule.name }}</td>
+                  <td style="padding:10px 12px;font-size:0.75rem;font-weight:700">
+                    {% if result.status == 'FAIL' %}
+                      <span style="color:#f87171">FAIL</span>
+                    {% else %}
+                      <span style="color:#fbbf24">ERROR</span>
+                    {% endif %}
+                  </td>
+                  <td style="padding:10px 12px;font-size:0.78rem;color:#94a3b8;font-family:monospace">
+                    {% if result.rule.schema_name and result.rule.table_name %}{{ result.rule.schema_name }}.{{ result.rule.table_name }}{% else %}<em style="color:#64748b">custom sql</em>{% endif %}
+                  </td>
+                  <td style="padding:10px 12px;font-size:0.78rem;color:#94a3b8">
+                    {% if result.row_count is not None %}{{ result.row_count }}{% else %}&mdash;{% endif %}
+                  </td>
+                  <td style="padding:10px 12px;font-size:0.78rem;color:#94a3b8">
+                    {% if result.last_record_age_hours is not None %}{{ result.last_record_age_hours|floatformat:1 }}{% else %}&mdash;{% endif %}
+                  </td>
+                  <td style="padding:10px 12px;font-size:0.75rem;color:#f87171;font-family:monospace;max-width:180px;word-break:break-word">
+                    {% if result.error_message %}{{ result.error_message|truncatechars:120 }}{% else %}&mdash;{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px;border-top:1px solid #2d3148;background:#161929">
+              <p style="margin:0;font-size:0.72rem;color:#64748b">
+                This digest was sent by DataPulse because you have <strong style="color:#94a3b8">Digest mode</strong> enabled.
+                One email is sent per run when at least one rule with &ldquo;Notify on failure&rdquo; fails.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

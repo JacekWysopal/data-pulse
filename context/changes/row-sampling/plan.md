@@ -440,9 +440,9 @@ Migration `0013_ruleresult_sample_rows` adds a nullable column with no default. 
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 Migration file depends on 0012_rule_notify_fields
-- [ ] 1.3 All existing tests pass after migration
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 Migration file depends on 0012_rule_notify_fields
+- [x] 1.3 All existing tests pass after migration
 
 #### Manual
 
@@ -453,24 +453,24 @@ Migration `0013_ruleresult_sample_rows` adds a nullable column with no default. 
 
 #### Automated
 
-- [ ] 2.1 _serialize_row converts datetime correctly
-- [ ] 2.2 _serialize_row converts Decimal correctly
-- [ ] 2.3 _fetch_sample_rows returns list of dicts from mock cursor
-- [ ] 2.4 _fetch_sample_rows returns None on exception
-- [ ] 2.5 All existing tests pass
+- [x] 2.1 _serialize_row converts datetime correctly
+- [x] 2.2 _serialize_row converts Decimal correctly
+- [x] 2.3 _fetch_sample_rows returns list of dicts from mock cursor
+- [x] 2.4 _fetch_sample_rows returns None on exception
+- [x] 2.5 All existing tests pass
 
 #### Manual
 
-- [ ] 2.6 No runtime import errors for _fetch_sample_rows
+- [x] 2.6 No runtime import errors for _fetch_sample_rows
 
 ### Phase 3: Hook Sampling into Check Functions and Call Sites
 
 #### Automated
 
-- [ ] 3.1 _check_volume_freshness FAIL result returns sample_rows key
-- [ ] 3.2 _check_custom_sql FAIL result returns sample_rows key
-- [ ] 3.3 run_single_rule saves sample_rows to RuleResult
-- [ ] 3.4 All existing tests pass
+- [x] 3.1 _check_volume_freshness FAIL result returns sample_rows key
+- [x] 3.2 _check_custom_sql FAIL result returns sample_rows key
+- [x] 3.3 run_single_rule saves sample_rows to RuleResult
+- [x] 3.4 All existing tests pass
 
 #### Manual
 
@@ -480,8 +480,8 @@ Migration `0013_ruleresult_sample_rows` adds a nullable column with no default. 
 
 #### Automated
 
-- [ ] 4.1 Existing view tests pass with no 500 errors
-- [ ] 4.2 test_rule_history_shows_results still passes
+- [x] 4.1 Existing view tests pass with no 500 errors
+- [x] 4.2 test_rule_history_shows_results still passes
 
 #### Manual
 
@@ -494,8 +494,8 @@ Migration `0013_ruleresult_sample_rows` adds a nullable column with no default. 
 
 #### Automated
 
-- [ ] 5.1 All new tests pass
-- [ ] 5.2 Full test suite green — no regressions
+- [x] 5.1 All new tests pass
+- [x] 5.2 Full test suite green — no regressions
 
 #### Manual
 

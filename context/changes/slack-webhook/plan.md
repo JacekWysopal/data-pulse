@@ -396,8 +396,8 @@ Migration 0013 is purely additive: a new model and two new nullable/default fiel
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 Existing test suite passes after model changes
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 Existing test suite passes after model changes
 
 #### Manual
 
@@ -408,7 +408,7 @@ Migration 0013 is purely additive: a new model and two new nullable/default fiel
 
 #### Automated
 
-- [ ] 2.1 slack_service.py imports without error and existing tests pass
+- [x] 2.1 slack_service.py imports without error and existing tests pass
 
 #### Manual
 
@@ -418,19 +418,20 @@ Migration 0013 is purely additive: a new model and two new nullable/default fiel
 
 #### Automated
 
-- [ ] 3.1 Full test suite passes
-- [ ] 3.2 No remaining send_fail_notification import in services.py
+- [x] 3.1 Full test suite passes
+- [x] 3.2 No remaining send_fail_notification import in services.py
 
 #### Manual
 
-- [ ] 3.3 FAIL result triggers both email and Slack notifications
+- [ ] 3.3 Existing send_fail_notification mock targets updated in tests
+- [ ] 3.4 FAIL result triggers both email and Slack notifications
 
 ### Phase 4: UI — SlackWebhook CRUD + Rule Toggle
 
 #### Automated
 
-- [ ] 4.1 New view tests pass
-- [ ] 4.2 Form validation rejects blank URL
+- [x] 4.1 New view tests pass
+- [x] 4.2 Form validation rejects blank URL
 
 #### Manual
 
@@ -441,5 +442,5 @@ Migration 0013 is purely additive: a new model and two new nullable/default fiel
 
 #### Automated
 
-- [ ] 5.1 Full test suite passes with no regressions
-- [ ] 5.2 At least 15 new test methods present
+- [x] 5.1 Full test suite passes with no regressions
+- [x] 5.2 At least 15 new test methods present

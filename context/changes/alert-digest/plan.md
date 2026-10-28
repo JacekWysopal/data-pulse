@@ -494,9 +494,9 @@ safety net for existing users who haven't triggered the signal yet.
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 Default notification_mode is immediate for new users
-- [ ] 1.3 No migration conflicts
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 Default notification_mode is immediate for new users
+- [x] 1.3 No migration conflicts
 
 #### Manual
 
@@ -506,11 +506,11 @@ safety net for existing users who haven't triggered the signal yet.
 
 #### Automated
 
-- [ ] 2.1 send_digest_notification returns False for empty failing_results
-- [ ] 2.2 send_digest_notification returns False for user with no email
-- [ ] 2.3 Summary context (is_summary=True) used when failing_results >= 10
-- [ ] 2.4 mail.outbox receives exactly one message per call
-- [ ] 2.5 Rule.last_notified_at not updated by send_digest_notification
+- [x] 2.1 send_digest_notification returns False for empty failing_results
+- [x] 2.2 send_digest_notification returns False for user with no email
+- [x] 2.3 Summary context (is_summary=True) used when failing_results >= 10
+- [x] 2.4 mail.outbox receives exactly one message per call
+- [x] 2.5 Rule.last_notified_at not updated by send_digest_notification
 
 #### Manual
 
@@ -521,12 +521,12 @@ safety net for existing users who haven't triggered the signal yet.
 
 #### Automated
 
-- [ ] 3.1 run_checks_for_user digest mode sends 1 email for N failures
-- [ ] 3.2 run_checks_for_user immediate mode sends N emails
-- [ ] 3.3 run_checks_for_user digest mode sends 0 emails for no failures
-- [ ] 3.4 run_all_checks two digest users sends 2 emails
-- [ ] 3.5 run_all_checks mixed mode sends per-rule for immediate and digest for digest user
-- [ ] 3.6 Rule.last_notified_at not updated for digest-mode users
+- [x] 3.1 run_checks_for_user digest mode sends 1 email for N failures
+- [x] 3.2 run_checks_for_user immediate mode sends N emails
+- [x] 3.3 run_checks_for_user digest mode sends 0 emails for no failures
+- [x] 3.4 run_all_checks two digest users sends 2 emails
+- [x] 3.5 run_all_checks mixed mode sends per-rule for immediate and digest for digest user
+- [x] 3.6 Rule.last_notified_at not updated for digest-mode users
 
 #### Manual
 
@@ -536,10 +536,10 @@ safety net for existing users who haven't triggered the signal yet.
 
 #### Automated
 
-- [ ] 4.1 GET /monitor/settings/ returns 200 for authenticated user
-- [ ] 4.2 GET /monitor/settings/ redirects to login for anonymous user
-- [ ] 4.3 POST with notification_mode=digest updates profile and redirects 302
-- [ ] 4.4 POST with invalid mode handled safely
+- [x] 4.1 GET /monitor/settings/ returns 200 for authenticated user
+- [x] 4.2 GET /monitor/settings/ redirects to login for anonymous user
+- [x] 4.3 POST with notification_mode=digest updates profile and redirects 302
+- [x] 4.4 POST with invalid mode handled safely
 
 #### Manual
 
@@ -551,11 +551,11 @@ safety net for existing users who haven't triggered the signal yet.
 
 #### Automated
 
-- [ ] 5.1 UserProfile auto-creation tests pass
-- [ ] 5.2 send_digest_notification unit tests pass
-- [ ] 5.3 services.py integration tests pass
-- [ ] 5.4 Settings view tests pass
-- [ ] 5.5 All existing tests still pass
+- [x] 5.1 UserProfile auto-creation tests pass
+- [x] 5.2 send_digest_notification unit tests pass
+- [x] 5.3 services.py integration tests pass
+- [x] 5.4 Settings view tests pass
+- [x] 5.5 All existing tests still pass
 
 #### Manual
 

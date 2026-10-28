@@ -430,9 +430,9 @@ No existing data requires migration. The new migration adds only new tables. Run
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly (python manage.py migrate --run-syncdb)
-- [ ] 1.2 No pending migrations (python manage.py migrate --check)
-- [ ] 1.3 DbtIntegration model unit test: create, secret round-trip, unique constraint
+- [x] 1.1 Migration applies cleanly (python manage.py migrate --run-syncdb)
+- [x] 1.2 No pending migrations (python manage.py migrate --check)
+- [x] 1.3 DbtIntegration model unit test: create, secret round-trip, unique constraint
 
 #### Manual
 
@@ -442,13 +442,13 @@ No existing data requires migration. The new migration adds only new tables. Run
 
 #### Automated
 
-- [ ] 2.1 Valid HMAC + success status → HTTP 200
-- [ ] 2.2 Wrong secret → HTTP 401
-- [ ] 2.3 Missing Authorization header → HTTP 401
-- [ ] 2.4 dbt Cloud nested payload → correct job_id extracted
-- [ ] 2.5 Flat dbt Core payload → correct job_id extracted
-- [ ] 2.6 Non-success run_status → HTTP 200 ignored
-- [ ] 2.7 Malformed JSON → HTTP 400
+- [x] 2.1 Valid HMAC + success status → HTTP 200
+- [x] 2.2 Wrong secret → HTTP 401
+- [x] 2.3 Missing Authorization header → HTTP 401
+- [x] 2.4 dbt Cloud nested payload → correct job_id extracted
+- [x] 2.5 Flat dbt Core payload → correct job_id extracted
+- [x] 2.6 Non-success run_status → HTTP 200 ignored
+- [x] 2.7 Malformed JSON → HTTP 400
 
 #### Manual
 
@@ -458,8 +458,8 @@ No existing data requires migration. The new migration adds only new tables. Run
 
 #### Automated
 
-- [ ] 3.1 Successful webhook triggers run_single_rule once per mapped rule
-- [ ] 3.2 Response JSON contains correct triggered count and results list
+- [x] 3.1 Successful webhook triggers run_single_rule once per mapped rule
+- [x] 3.2 Response JSON contains correct triggered count and results list
 
 #### Manual
 
@@ -469,11 +469,11 @@ No existing data requires migration. The new migration adds only new tables. Run
 
 #### Automated
 
-- [ ] 4.1 GET /integrations/dbt/ (logged in) → HTTP 200
-- [ ] 4.2 GET /integrations/dbt/ (anonymous) → redirect to login
-- [ ] 4.3 POST /integrations/dbt/new/ → integration created, secret in response
-- [ ] 4.4 GET /integrations/dbt/<pk>/edit/ for other user → HTTP 404
-- [ ] 4.5 POST /integrations/dbt/<pk>/delete/ → integration removed
+- [x] 4.1 GET /integrations/dbt/ (logged in) → HTTP 200
+- [x] 4.2 GET /integrations/dbt/ (anonymous) → redirect to login
+- [x] 4.3 POST /integrations/dbt/new/ → integration created, secret in response
+- [x] 4.4 GET /integrations/dbt/<pk>/edit/ for other user → HTTP 404
+- [x] 4.5 POST /integrations/dbt/<pk>/delete/ → integration removed
 
 #### Manual
 
@@ -485,8 +485,8 @@ No existing data requires migration. The new migration adds only new tables. Run
 
 #### Automated
 
-- [ ] 5.1 All new tests pass (python manage.py test monitor)
-- [ ] 5.2 No regressions in existing test suite
+- [x] 5.1 All new tests pass (python manage.py test monitor)
+- [x] 5.2 No regressions in existing test suite
 
 #### Manual
 

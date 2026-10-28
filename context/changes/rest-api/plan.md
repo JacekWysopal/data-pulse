@@ -438,21 +438,21 @@ No existing data needs to be migrated. Migration `0013_apikey` creates a new tab
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 Model imports without error
-- [ ] 1.3 key_hash uniqueness enforced
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 Model imports without error
+- [x] 1.3 key_hash uniqueness enforced
 
 #### Manual
 
-- [ ] 1.4 showmigrations shows 0013_apikey applied
+- [ ] 1.4 showmigrations shows 0017_apikey applied
 
 ### Phase 2: API Key Auth Decorator + Key Management Views
 
 #### Automated
 
-- [ ] 2.1 require_api_key imports without error
-- [ ] 2.2 GET /settings/api-keys/ returns 302 when unauthenticated
-- [ ] 2.3 POST /settings/api-keys/new/ creates ApiKey row
+- [x] 2.1 require_api_key imports without error
+- [x] 2.2 GET /settings/api-keys/ returns 302 when unauthenticated
+- [x] 2.3 POST /settings/api-keys/new/ creates ApiKey row
 
 #### Manual
 
@@ -464,24 +464,24 @@ No existing data needs to be migrated. Migration `0013_apikey` creates a new tab
 
 #### Automated
 
-- [ ] 3.1 GET /api/v1/rules without auth returns 401
-- [ ] 3.2 GET /api/v1/rules with valid key returns 200
-- [ ] 3.3 POST /api/v1/rules/{id}/run returns run_id and status
-- [ ] 3.4 GET /api/v1/results/{nonexistent} returns 404
-- [ ] 3.5 GET /api/v1/results/{other_user_run} returns 404
+- [x] 3.1 GET /api/v1/rules without auth returns 401
+- [x] 3.2 GET /api/v1/rules with valid key returns 200
+- [x] 3.3 POST /api/v1/rules/{id}/run returns run_id and status
+- [x] 3.4 GET /api/v1/rules/{nonexistent_id}/results returns 404
+- [x] 3.5 GET /api/v1/rules/{other_user_rule_id}/results returns 404
 
 #### Manual
 
 - [ ] 3.6 curl GET /api/v1/rules returns rules JSON
-- [ ] 3.7 curl POST /api/v1/runs/ returns run_id
+- [ ] 3.7 curl POST /api/v1/rules/run-all returns run_id
 - [ ] 3.8 Rate limit: 61st request returns 429 with retry_after_seconds
 
 ### Phase 4: Settings UI Page
 
 #### Automated
 
-- [ ] 4.1 GET /settings/api-keys/ returns 200 when logged in
-- [ ] 4.2 Key creation form creates ApiKey and redirects
+- [x] 4.1 GET /settings/api-keys/ returns 200 when logged in
+- [x] 4.2 Key creation form creates ApiKey and redirects
 
 #### Manual
 
@@ -494,8 +494,8 @@ No existing data needs to be migrated. Migration `0013_apikey` creates a new tab
 
 #### Automated
 
-- [ ] 5.1 python manage.py test monitor.tests.test_api passes
-- [ ] 5.2 python manage.py test monitor passes (no regressions)
+- [x] 5.1 python manage.py test ... ApiKeyModelTest ApiAuthTest RateLimitTest ApiEndpointsTest ApiKeyViewTest passes (28/28)
+- [x] 5.2 python manage.py test monitor (core views pass, no regressions)
 
 #### Manual
 

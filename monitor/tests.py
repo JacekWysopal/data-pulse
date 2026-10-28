@@ -1664,7 +1664,7 @@ class EmailNotificationTest(TestCase):
     # ── services.py integration ─────────────────────────────────────
 
     def test_run_single_rule_fail_calls_send_notification(self):
-        """run_single_rule with a FAIL result calls send_fail_notification."""
+        """run_single_rule with a FAIL result calls notify_rule_result."""
         from unittest.mock import patch as _patch, MagicMock as _MM
         conn = make_connection(user=self.user)
         rule = make_rule(name='hook_test', min_rows=1000, connection=conn, user=self.user)
@@ -1672,7 +1672,7 @@ class EmailNotificationTest(TestCase):
         rule.save()
 
         with _patch('monitor.services.psycopg2.connect') as mock_conn, \
-             _patch('monitor.services.send_fail_notification') as mock_notify:
+             _patch('monitor.services.notify_rule_result') as mock_notify:
             cursor = _MM()
             cursor.__enter__ = _MM(return_value=cursor)
             cursor.__exit__ = _MM(return_value=False)
@@ -1688,7 +1688,7 @@ class EmailNotificationTest(TestCase):
         self.assertEqual(call_result.status, RuleResult.Status.FAIL)
 
     def test_run_single_rule_ok_skips_notification(self):
-        """run_single_rule with OK result does NOT call send_fail_notification."""
+        """run_single_rule with OK result does NOT call notify_rule_result."""
         from unittest.mock import patch as _patch, MagicMock as _MM
         conn = make_connection(name='ok_conn', user=self.user)
         rule = make_rule(name='ok_test', min_rows=1, connection=conn, user=self.user)
@@ -1696,7 +1696,7 @@ class EmailNotificationTest(TestCase):
         rule.save()
 
         with _patch('monitor.services.psycopg2.connect') as mock_conn, \
-             _patch('monitor.services.send_fail_notification') as mock_notify:
+             _patch('monitor.services.notify_rule_result') as mock_notify:
             cursor = _MM()
             cursor.__enter__ = _MM(return_value=cursor)
             cursor.__exit__ = _MM(return_value=False)
@@ -1709,14 +1709,15 @@ class EmailNotificationTest(TestCase):
         mock_notify.assert_not_called()
 
     def test_run_all_checks_fail_calls_send_notification(self):
-        """run_all_checks with a FAIL rule and notify_on_fail=True calls send_fail_notification."""
+        """run_all_checks with a FAIL rule and notify_on_fail=True calls notify_rule_result."""
         from unittest.mock import patch as _patch, MagicMock as _MM
         conn = make_connection(name="all_conn", user=self.user)
         rule = make_rule(name="all_fail_rule", min_rows=1000, connection=conn, user=self.user)
         rule.notify_on_fail = True
         rule.save()
 
-        with _patch("monitor.services.psycopg2.connect") as mock_conn,              _patch("monitor.services.send_fail_notification") as mock_notify:
+        with _patch("monitor.services.psycopg2.connect") as mock_conn, \
+             _patch("monitor.services.notify_rule_result") as mock_notify:
             cursor = _MM()
             cursor.__enter__ = _MM(return_value=cursor)
             cursor.__exit__ = _MM(return_value=False)
@@ -1889,3 +1890,2030 @@ class ScheduleDashboardTests(TestCase):
         self.assertEqual(next_run.hour, 8)
         self.assertEqual(next_run.minute, 0)
 
+
+
+
+# =================================================================
+#  dbt Integration - model
+# =================================================================
+
+from .models import DbtIntegration
+
+
+def make_dbt_integration(name='test dbt', job_id='job_001', user=None, secret='s3cr3t'):
+    obj = DbtIntegration(name=name, job_id=job_id, user=user)
+    obj.set_secret_key(secret)
+    obj.save()
+    return obj
+
+
+def make_rule_for_dbt(name='dbt_rule', user=None):
+    # notify_slack required by migration 0013 NOT NULL constraint
+    return Rule.objects.create(
+        name=name,
+        schema_name='public',
+        table_name='orders',
+        min_row_count=1,
+        user=user,
+        notify_slack=False,
+    )
+
+
+class DbtIntegrationModelTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('dbt_model_user', password='pass')
+
+    def test_set_and_get_secret_key(self):
+        obj = make_dbt_integration(user=self.user, secret='mysecretvalue')
+        self.assertEqual(obj.get_secret_key(), 'mysecretvalue')
+        obj.refresh_from_db()
+        self.assertEqual(obj.get_secret_key(), 'mysecretvalue')
+
+    def test_stored_value_differs_from_raw(self):
+        from django.conf import settings as djsettings
+        if not getattr(djsettings, 'FIELD_ENCRYPTION_KEY', None):
+            self.skipTest('FIELD_ENCRYPTION_KEY not set - plaintext, skip ciphertext check')
+        obj = make_dbt_integration(user=self.user, secret='plaintext_value')
+        obj.refresh_from_db()
+        self.assertNotEqual(obj._secret_key, 'plaintext_value')
+
+    def test_unique_together_constraint(self):
+        from django.db import IntegrityError
+        make_dbt_integration(name='first', job_id='dup_job', user=self.user)
+        with self.assertRaises(IntegrityError):
+            make_dbt_integration(name='second', job_id='dup_job', user=self.user)
+
+    def test_unique_together_allows_same_job_id_for_different_users(self):
+        other_user = User.objects.create_user('dbt_model_user2', password='pass')
+        make_dbt_integration(name='a', job_id='shared_job', user=self.user)
+        obj2 = make_dbt_integration(name='b', job_id='shared_job', user=other_user)
+        self.assertIsNotNone(obj2.pk)
+
+    def test_str_representation(self):
+        obj = make_dbt_integration(name='prod run', job_id='42', user=self.user)
+        self.assertIn('prod run', str(obj))
+        self.assertIn('42', str(obj))
+
+    def test_rules_m2m_empty_by_default(self):
+        obj = make_dbt_integration(user=self.user)
+        self.assertEqual(obj.rules.count(), 0)
+
+    def test_rules_m2m_can_be_set(self):
+        obj = make_dbt_integration(user=self.user)
+        rule = make_rule_for_dbt(user=self.user)
+        obj.rules.set([rule])
+        self.assertEqual(obj.rules.count(), 1)
+
+
+# =================================================================
+#  dbt Integration - webhook view
+# =================================================================
+
+import hashlib
+import hmac as _hmac
+
+WEBHOOK_URL = '/api/v1/webhooks/dbt/'
+
+
+def _sign(secret, body):
+    return 'sha256=' + _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+class DbtWebhookViewTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('dbt_webhook_user', password='pass')
+        self.secret = 'testsecretvalue123'
+        self.integration = make_dbt_integration(
+            name='webhook test', job_id='job_wh', user=self.user, secret=self.secret,
+        )
+        rule = make_rule_for_dbt(name='wh_rule', user=self.user)
+        self.integration.rules.set([rule])
+        self.client = Client()
+
+    def _post(self, payload, secret=None, content_type='application/json'):
+        body = json.dumps(payload).encode()
+        sig = _sign(secret or self.secret, body)
+        return self.client.post(
+            WEBHOOK_URL, data=body,
+            content_type=content_type,
+            HTTP_AUTHORIZATION=sig,
+        )
+
+    @patch('monitor.views.run_single_rule')
+    def test_valid_hmac_success_triggers_rules(self, mock_run):
+        mock_run.return_value = MagicMock(status='OK')
+        r = self._post({'job_id': 'job_wh', 'run_status': 'Success'})
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ok')
+        self.assertEqual(data['triggered'], 1)
+        mock_run.assert_called_once()
+
+    def test_wrong_secret_returns_401(self):
+        r = self._post({'job_id': 'job_wh', 'run_status': 'Success'}, secret='wrongsecret')
+        self.assertEqual(r.status_code, 401)
+
+    def test_missing_authorization_header_returns_401(self):
+        body = json.dumps({'job_id': 'job_wh', 'run_status': 'Success'}).encode()
+        r = self.client.post(WEBHOOK_URL, data=body, content_type='application/json')
+        self.assertEqual(r.status_code, 401)
+
+    @patch('monitor.views.run_single_rule')
+    def test_non_success_run_status_ignored(self, mock_run):
+        r = self._post({'job_id': 'job_wh', 'run_status': 'Error'})
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ignored')
+        mock_run.assert_not_called()
+
+    @patch('monitor.views.run_single_rule')
+    def test_dbt_cloud_payload_shape(self, mock_run):
+        mock_run.return_value = MagicMock(status='OK')
+        payload = {'data': {'jobId': 'job_wh', 'runStatus': 'Success'}}
+        body = json.dumps(payload).encode()
+        sig = _sign(self.secret, body)
+        r = self.client.post(
+            WEBHOOK_URL, data=body, content_type='application/json',
+            HTTP_AUTHORIZATION=sig,
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ok')
+        mock_run.assert_called_once()
+
+    @patch('monitor.views.run_single_rule')
+    def test_dbt_core_flat_payload_shape(self, mock_run):
+        mock_run.return_value = MagicMock(status='OK')
+        r = self._post({'job_id': 'job_wh', 'run_status': 'success'})
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ok')
+        mock_run.assert_called_once()
+
+    def test_invalid_json_returns_400(self):
+        r = self.client.post(
+            WEBHOOK_URL, data=b'not valid json', content_type='application/json',
+            HTTP_AUTHORIZATION='sha256=abc',
+        )
+        self.assertEqual(r.status_code, 400)
+
+    @patch('monitor.views.run_single_rule')
+    def test_response_contains_results_list(self, mock_run):
+        mock_run.return_value = MagicMock(status='OK')
+        r = self._post({'job_id': 'job_wh', 'run_status': 'Success'})
+        data = json.loads(r.content)
+        self.assertIn('results', data)
+        self.assertEqual(len(data['results']), 1)
+        self.assertEqual(data['results'][0]['status'], 'OK')
+
+    @patch('monitor.views.run_single_rule')
+    def test_success_case_insensitive(self, mock_run):
+        mock_run.return_value = MagicMock(status='OK')
+        r = self._post({'job_id': 'job_wh', 'run_status': 'SUCCESS'})
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ok')
+        mock_run.assert_called_once()
+
+
+# =================================================================
+#  dbt Integration - UI CRUD views
+# =================================================================
+
+
+class DbtIntegrationUITest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('dbt_ui_user', password='pass')
+        self.other = User.objects.create_user('dbt_ui_other', password='pass')
+        self.client.login(username='dbt_ui_user', password='pass')
+
+    def test_list_view_requires_login(self):
+        self.client.logout()
+        r = self.client.get(reverse('monitor:dbt_integration_list'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_list_view_200_when_logged_in(self):
+        r = self.client.get(reverse('monitor:dbt_integration_list'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_list_view_shows_only_own_integrations(self):
+        make_dbt_integration(name='mine', job_id='j1', user=self.user)
+        make_dbt_integration(name='theirs', job_id='j2', user=self.other)
+        r = self.client.get(reverse('monitor:dbt_integration_list'))
+        self.assertContains(r, 'mine')
+        self.assertNotContains(r, 'theirs')
+
+    def test_create_view_get_200(self):
+        r = self.client.get(reverse('monitor:dbt_integration_create'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_create_view_post_creates_integration(self):
+        r = self.client.post(reverse('monitor:dbt_integration_create'), {
+            'name': 'new integration',
+            'job_id': 'job_new',
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('raw_secret_key', r.context)
+        self.assertTrue(DbtIntegration.objects.filter(job_id='job_new').exists())
+
+    def test_create_view_displays_raw_secret_once(self):
+        r = self.client.post(reverse('monitor:dbt_integration_create'), {
+            'name': 'secret test',
+            'job_id': 'job_secret',
+        })
+        self.assertIn('raw_secret_key', r.context)
+        raw = r.context['raw_secret_key']
+        self.assertEqual(len(raw), 64)
+        self.assertContains(r, raw)
+
+    def test_edit_view_200(self):
+        obj = make_dbt_integration(name='editable', job_id='j_edit', user=self.user)
+        r = self.client.get(reverse('monitor:dbt_integration_edit', args=[obj.pk]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_edit_view_404_for_other_user(self):
+        obj = make_dbt_integration(name='others', job_id='j_other', user=self.other)
+        r = self.client.get(reverse('monitor:dbt_integration_edit', args=[obj.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_edit_view_post_updates_name(self):
+        obj = make_dbt_integration(name='old name', job_id='j_upd', user=self.user)
+        r = self.client.post(reverse('monitor:dbt_integration_edit', args=[obj.pk]), {
+            'name': 'new name',
+            'job_id': 'j_upd',
+        })
+        self.assertRedirects(r, reverse('monitor:dbt_integration_list'))
+        obj.refresh_from_db()
+        self.assertEqual(obj.name, 'new name')
+
+    def test_delete_view_get_200(self):
+        obj = make_dbt_integration(name='del me', job_id='j_del', user=self.user)
+        r = self.client.get(reverse('monitor:dbt_integration_delete', args=[obj.pk]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_delete_view_post_removes_integration(self):
+        obj = make_dbt_integration(name='gone', job_id='j_gone', user=self.user)
+        r = self.client.post(reverse('monitor:dbt_integration_delete', args=[obj.pk]))
+        self.assertRedirects(r, reverse('monitor:dbt_integration_list'))
+        self.assertFalse(DbtIntegration.objects.filter(pk=obj.pk).exists())
+
+    def test_delete_view_404_for_other_user(self):
+        obj = make_dbt_integration(name='protected', job_id='j_prot', user=self.other)
+        r = self.client.post(reverse('monitor:dbt_integration_delete', args=[obj.pk]))
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(DbtIntegration.objects.filter(pk=obj.pk).exists())
+
+    def test_edit_view_does_not_expose_secret(self):
+        obj = make_dbt_integration(name='nosec', job_id='j_nosec', user=self.user, secret='supersecretrawvalue')
+        r = self.client.get(reverse('monitor:dbt_integration_edit', args=[obj.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'supersecretrawvalue')
+
+# ═══════════════════════════════════════════════════════════════════
+#  Phase 5 — alert-digest tests
+# ═══════════════════════════════════════════════════════════════════
+
+
+class UserProfileModelTest(TestCase):
+    """UserProfile auto-creation and default mode."""
+
+    def test_profile_auto_created_on_user_create(self):
+        user = User.objects.create_user('profile_auto_user', password='pass')
+        from .models import UserProfile
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+
+    def test_default_mode_is_immediate(self):
+        user = User.objects.create_user('default_mode_user', password='pass')
+        self.assertEqual(user.profile.notification_mode, 'immediate')
+
+    def test_signal_fires_idempotently_on_resave(self):
+        """Re-saving a user does not duplicate the profile."""
+        from .models import UserProfile
+        user = User.objects.create_user('resave_user', password='pass')
+        user.save()  # trigger signal again
+        self.assertEqual(UserProfile.objects.filter(user=user).count(), 1)
+
+    def test_profile_str(self):
+        user = User.objects.create_user('str_user', password='pass')
+        self.assertIn('immediate', str(user.profile))
+
+
+class DigestNotificationTest(TestCase):
+    """Unit tests for send_digest_notification."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'digest_notif_user', email='digest@example.com', password='pass'
+        )
+        self.run = CheckRun.objects.create(finished_at=timezone.now())
+        self.rule = make_rule(name='digest_rule', min_rows=10, user=self.user)
+        self.result = RuleResult.objects.create(
+            run=self.run, rule=self.rule, status='FAIL'
+        )
+
+    def test_returns_false_for_empty_list(self):
+        from .email_service import send_digest_notification
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            self.assertFalse(send_digest_notification(self.run, [], self.user))
+
+    def test_returns_false_for_user_without_email(self):
+        from .email_service import send_digest_notification
+        from django.test.utils import override_settings
+        no_email_user = User.objects.create_user('no_email_digest', email='', password='pass')
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            self.assertFalse(send_digest_notification(self.run, [self.result], no_email_user))
+
+    def test_sends_exactly_one_email(self):
+        from .email_service import send_digest_notification
+        from django.core import mail
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = send_digest_notification(self.run, [self.result], self.user)
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('digest@example.com', mail.outbox[0].to)
+
+    def test_subject_contains_count_and_run_id(self):
+        from .email_service import send_digest_notification
+        from django.core import mail
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            send_digest_notification(self.run, [self.result], self.user)
+        self.assertIn(str(self.run.pk), mail.outbox[0].subject)
+        self.assertIn('1 rule(s)', mail.outbox[0].subject)
+
+    def test_is_summary_true_for_ten_or_more_failures(self):
+        """When failing_results >= 10, the rendered text contains the summary line."""
+        from .email_service import send_digest_notification
+        from django.core import mail
+        from django.test.utils import override_settings
+        results = []
+        for i in range(10):
+            r = make_rule(name=f'summary_rule_{i}', min_rows=1, user=self.user)
+            results.append(RuleResult.objects.create(run=self.run, rule=r, status='FAIL'))
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            send_digest_notification(self.run, results, self.user)
+        text_body = mail.outbox[0].body
+        self.assertIn('see dashboard', text_body)
+
+    def test_last_notified_at_not_updated(self):
+        """Digest does not touch Rule.last_notified_at."""
+        from .email_service import send_digest_notification
+        from django.core import mail
+        from django.test.utils import override_settings
+        before = self.rule.last_notified_at
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            send_digest_notification(self.run, [self.result], self.user)
+        self.rule.refresh_from_db()
+        self.assertEqual(self.rule.last_notified_at, before)
+
+
+class DigestFilterTest(TestCase):
+    """Digest only includes results from rules where notify_on_fail is True."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'digest_filter_user', email='filter@example.com', password='pass'
+        )
+        self.user.profile.notification_mode = 'digest'
+        self.user.profile.save()
+        self.conn = make_connection(user=self.user)
+        self.run_obj = CheckRun.objects.create(finished_at=timezone.now())
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_only_notify_on_fail_rules_trigger_digest(self, mock_connect):
+        """Rules with notify_on_fail=False are never included in the digest."""
+        from django.core import mail
+        from django.test.utils import override_settings
+
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchone.return_value = (3,)  # below min_rows -> FAIL
+        mock_connect.return_value.cursor.return_value = cursor
+
+        notify_rule = make_rule(name='notif_on', min_rows=100,
+                                connection=self.conn, user=self.user)
+        notify_rule.notify_on_fail = True
+        notify_rule.save()
+
+        silent_rule = make_rule(name='silent_fail', min_rows=100,
+                                connection=self.conn, user=self.user)
+        silent_rule.notify_on_fail = False
+        silent_rule.save()
+
+        from .email_service import send_digest_notification as orig_send
+
+        captured_results = []
+
+        def capturing_send(run, failing_results, user):
+            captured_results.extend(failing_results)
+            return orig_send(run, failing_results, user)
+
+        from unittest.mock import patch as _patch
+        with _patch('monitor.services.send_digest_notification', side_effect=capturing_send):
+            with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+                from .services import run_checks_for_user
+                run_checks_for_user(self.user)
+
+        rule_names = [r.rule.name for r in captured_results]
+        self.assertIn('notif_on', rule_names)
+        self.assertNotIn('silent_fail', rule_names)
+
+
+class NotificationModeTest(TestCase):
+    """Immediate vs digest routing in run_checks_for_user and run_all_checks."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'mode_test_user', email='mode@example.com', password='pass'
+        )
+        self.conn = make_connection(user=self.user)
+
+    def _failing_cursor_mock(self):
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchone.return_value = (1,)  # below min_rows=100 -> FAIL
+        return cursor
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_digest_mode_sends_one_email_for_n_failures(self, mock_connect):
+        from django.core import mail
+        from django.test.utils import override_settings
+
+        self.user.profile.notification_mode = 'digest'
+        self.user.profile.save()
+
+        mock_connect.return_value.cursor.return_value = self._failing_cursor_mock()
+
+        for i in range(3):
+            r = make_rule(name=f'digest_{i}', min_rows=100,
+                          connection=self.conn, user=self.user)
+            r.notify_on_fail = True
+            r.save()
+
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            from .services import run_checks_for_user
+            run_checks_for_user(self.user)
+
+        self.assertEqual(len(mail.outbox), 1)
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_immediate_mode_sends_n_emails_for_n_failures(self, mock_connect):
+        from django.core import mail
+        from django.test.utils import override_settings
+
+        mock_connect.return_value.cursor.return_value = self._failing_cursor_mock()
+
+        for i in range(3):
+            r = make_rule(name=f'imm_{i}', min_rows=100,
+                          connection=self.conn, user=self.user)
+            r.notify_on_fail = True
+            r.save()
+
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            from .services import run_checks_for_user
+            run_checks_for_user(self.user)
+
+        self.assertEqual(len(mail.outbox), 3)
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_digest_mode_sends_no_email_when_all_ok(self, mock_connect):
+        from django.core import mail
+        from django.test.utils import override_settings
+
+        self.user.profile.notification_mode = 'digest'
+        self.user.profile.save()
+
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchone.return_value = (999,)  # above min_rows -> OK
+        mock_connect.return_value.cursor.return_value = cursor
+
+        r = make_rule(name='all_ok', min_rows=1,
+                      connection=self.conn, user=self.user)
+        r.notify_on_fail = True
+        r.save()
+
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            from .services import run_checks_for_user
+            run_checks_for_user(self.user)
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_run_all_checks_two_digest_users_sends_two_emails(self, mock_connect):
+        from django.core import mail
+        from django.test.utils import override_settings
+
+        user2 = User.objects.create_user(
+            'digest_user2', email='user2@example.com', password='pass'
+        )
+        conn2 = make_connection(name='conn2', url='postgresql://u:p@host2/db2', user=user2)
+
+        for u, c in [(self.user, self.conn), (user2, conn2)]:
+            u.profile.notification_mode = 'digest'
+            u.profile.save()
+            r = make_rule(name=f'rule_{u.username}', min_rows=100, connection=c, user=u)
+            r.notify_on_fail = True
+            r.save()
+
+        mock_connect.return_value.cursor.return_value = self._failing_cursor_mock()
+
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            from .services import run_all_checks
+            run_all_checks()
+
+        self.assertEqual(len(mail.outbox), 2)
+
+
+class SettingsViewTest(TestCase):
+    """Tests for GET/POST /settings/notifications/ (settings view)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'settings_view_user', email='sv@example.com', password='pass'
+        )
+        self.client.login(username='settings_view_user', password='pass')
+
+    def test_get_settings_200(self):
+        r = self.client.get(reverse('monitor:settings'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'immediate')
+        self.assertContains(r, 'digest')
+
+    def test_get_settings_redirects_anonymous(self):
+        self.client.logout()
+        r = self.client.get(reverse('monitor:settings'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_post_digest_updates_profile(self):
+        from .models import UserProfile
+        r = self.client.post(reverse('monitor:settings'), {'notification_mode': 'digest'})
+        self.assertRedirects(r, reverse('monitor:settings'), fetch_redirect_response=False)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.notification_mode, 'digest')
+
+    def test_post_invalid_mode_returns_400(self):
+        r = self.client.post(reverse('monitor:settings'), {'notification_mode': 'foobar'})
+        self.assertEqual(r.status_code, 400)
+
+    def test_post_immediate_updates_profile(self):
+        from .models import UserProfile
+        self.user.profile.notification_mode = 'digest'
+        self.user.profile.save()
+        r = self.client.post(reverse('monitor:settings'), {'notification_mode': 'immediate'})
+        self.assertRedirects(r, reverse('monitor:settings'), fetch_redirect_response=False)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.notification_mode, 'immediate')
+
+
+# ═══════════════════════════════════════════════════════════════
+#  REST API — ApiKey model, auth decorator, and endpoints
+# ═══════════════════════════════════════════════════════════════
+
+class ApiKeyModelTest(TestCase):
+    """Phase 1: ApiKey model fields, uniqueness, and __str__."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apikey_model_user', password='pass')
+
+    def test_create_api_key(self):
+        from .models import ApiKey
+        key = ApiKey.objects.create(
+            user=self.user,
+            name='test key',
+            key_hash='a' * 64,
+        )
+        self.assertEqual(key.name, 'test key')
+        self.assertTrue(key.is_active)
+        self.assertIsNone(key.last_used_at)
+
+    def test_key_hash_uniqueness_enforced(self):
+        """Two rows with the same key_hash should raise IntegrityError."""
+        from django.db import IntegrityError
+        from .models import ApiKey
+        ApiKey.objects.create(user=self.user, name='k1', key_hash='b' * 64)
+        with self.assertRaises(IntegrityError):
+            ApiKey.objects.create(user=self.user, name='k2', key_hash='b' * 64)
+
+    def test_user_name_unique_together(self):
+        """Two keys with the same user+name should raise IntegrityError."""
+        from django.db import IntegrityError
+        from .models import ApiKey
+        ApiKey.objects.create(user=self.user, name='dup', key_hash='c' * 64)
+        with self.assertRaises(IntegrityError):
+            ApiKey.objects.create(user=self.user, name='dup', key_hash='d' * 64)
+
+    def test_str(self):
+        from .models import ApiKey
+        key = ApiKey.objects.create(user=self.user, name='ci key', key_hash='e' * 64)
+        self.assertIn('ci key', str(key))
+        self.assertIn(self.user.username, str(key))
+
+
+def _make_api_key(user, name='test', raw='testrawkey'):
+    """Create an ApiKey row and return (raw_key_string, ApiKey instance)."""
+    import hashlib as _hl
+    from monitor.models import ApiKey
+    key_hash = _hl.sha256(raw.encode()).hexdigest()
+    api_key = ApiKey.objects.create(user=user, name=name, key_hash=key_hash)
+    return raw, api_key
+
+
+class ApiAuthTest(TestCase):
+    """Phase 2: require_api_key decorator — missing/invalid/inactive key, valid key."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apiauth_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='auth test')
+
+    def test_missing_auth_header_returns_401(self):
+        r = self.client.get('/api/v1/rules')
+        self.assertEqual(r.status_code, 401)
+        data = json.loads(r.content)
+        self.assertIn('error', data)
+
+    def test_wrong_scheme_returns_401(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Token {self.raw}')
+        self.assertEqual(r.status_code, 401)
+
+    def test_invalid_key_returns_401(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION='Bearer completely_wrong')
+        self.assertEqual(r.status_code, 401)
+        data = json.loads(r.content)
+        self.assertEqual(data['error'], 'invalid API key')
+
+    def test_inactive_key_returns_401(self):
+        from .models import ApiKey
+        ApiKey.objects.filter(pk=self.api_key.pk).update(is_active=False)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 401)
+
+    def test_valid_key_returns_200(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 200)
+
+    def test_valid_key_updates_last_used_at(self):
+        from .models import ApiKey
+        self.assertIsNone(self.api_key.last_used_at)
+        self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.api_key.refresh_from_db()
+        self.assertIsNotNone(self.api_key.last_used_at)
+
+
+from django.test.utils import override_settings as _override_settings
+
+_LOCMEM_CACHE = {'CACHES': {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}}
+
+
+class RateLimitTest(TestCase):
+    """Phase 2: rate limiting — under limit passes, 61st request fails."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ratelimit_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='rate test', raw='ratelimitrawkey')
+
+    def test_under_limit_passes(self):
+        from django.core.cache import cache
+        cache.clear()
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 200)
+
+    @_override_settings(**_LOCMEM_CACHE)
+    def test_61st_request_returns_429(self):
+        """After 60 requests in the same minute bucket, the 61st returns 429."""
+        from django.core.cache import cache
+        from monitor.api_auth import _RATE_LIMIT
+        cache.clear()
+        import time
+        bucket = int(time.time() // 60)
+        cache_key = f'rl:{self.api_key.pk}:{bucket}'
+        cache.set(cache_key, _RATE_LIMIT, timeout=120)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 429)
+        data = json.loads(r.content)
+        self.assertIn('retry_after_seconds', data)
+        self.assertGreaterEqual(data['retry_after_seconds'], 0)
+
+
+class ApiEndpointsTest(TestCase):
+    """Phase 3: API endpoint tests — auth, isolation, response shape."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('api_endpoints_user', password='pass')
+        self.other_user = User.objects.create_user('api_other_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='endpoints test', raw='endpointsrawkey')
+
+    def _auth(self):
+        return f'Bearer {self.raw}'
+
+    def test_list_rules_without_auth_returns_401(self):
+        r = self.client.get('/api/v1/rules')
+        self.assertEqual(r.status_code, 401)
+
+    def test_list_rules_returns_only_own_rules(self):
+        make_rule(name='my_rule', min_rows=1, user=self.user)
+        make_rule(name='other_rule', min_rows=1, user=self.other_user)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        names = [rule['name'] for rule in data['rules']]
+        self.assertIn('my_rule', names)
+        self.assertNotIn('other_rule', names)
+
+    def test_list_rules_response_shape(self):
+        make_rule(name='shape_rule', min_rows=1, user=self.user)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=self._auth())
+        data = json.loads(r.content)
+        self.assertIn('rules', data)
+        rule = data['rules'][0]
+        for field in ('id', 'name', 'schema_name', 'table_name', 'rule_type',
+                      'schedule_type', 'created_at', 'updated_at'):
+            self.assertIn(field, rule, f'Missing field: {field}')
+
+    def test_run_rule_returns_run_id_and_status(self):
+        from unittest.mock import patch, MagicMock
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=1, connection=conn, user=self.user)
+        with patch('monitor.api_views.run_single_rule') as mock_run:
+            mock_result = MagicMock()
+            mock_result.run_id = 99
+            mock_result.status = 'OK'
+            mock_result.row_count = 10
+            mock_result.last_record_age_hours = None
+            mock_result.error_message = ''
+            mock_result.checked_at.isoformat.return_value = '2026-01-01T00:00:00+00:00'
+            mock_run.return_value = mock_result
+            r = self.client.post(
+                f'/api/v1/rules/{rule.pk}/run',
+                HTTP_AUTHORIZATION=self._auth(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('run_id', data)
+        self.assertIn('status', data)
+
+    def test_run_rule_other_user_returns_404(self):
+        other_rule = make_rule(name='other_user_rule', min_rows=1, user=self.other_user)
+        r = self.client.post(
+            f'/api/v1/rules/{other_rule.pk}/run',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_run_all_returns_run_id_and_counts(self):
+        from unittest.mock import patch, MagicMock
+        with patch('monitor.api_views.run_checks_for_user') as mock_run:
+            mock_run_obj = MagicMock()
+            mock_run_obj.pk = 55
+            mock_run_obj.ok_count = 0
+            mock_run_obj.fail_count = 0
+            mock_run_obj.error_count = 0
+            mock_run_obj.started_at.isoformat.return_value = '2026-01-01T00:00:00+00:00'
+            mock_run_obj.finished_at = None
+            mock_run.return_value = mock_run_obj
+            r = self.client.post('/api/v1/rules/run-all', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('run_id', data)
+        self.assertIn('ok_count', data)
+        self.assertIn('fail_count', data)
+        self.assertIn('error_count', data)
+
+    def test_get_results_nonexistent_rule_returns_404(self):
+        r = self.client.get('/api/v1/rules/99999/results', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 404)
+
+    def test_get_results_other_user_rule_returns_404(self):
+        other_rule = make_rule(name='other_results_rule', min_rows=1, user=self.other_user)
+        r = self.client.get(
+            f'/api/v1/rules/{other_rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_get_results_returns_last_20(self):
+        rule = make_rule(name='results_rule', min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        for i in range(25):
+            RuleResult.objects.create(run=run, rule=rule, status='OK')
+        r = self.client.get(
+            f'/api/v1/rules/{rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('results', data)
+        self.assertLessEqual(len(data['results']), 20)
+        self.assertEqual(data['rule_id'], rule.pk)
+
+    def test_get_results_response_shape(self):
+        rule = make_rule(name='shape_results_rule', min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(run=run, rule=rule, status='OK')
+        r = self.client.get(
+            f'/api/v1/rules/{rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        data = json.loads(r.content)
+        result = data['results'][0]
+        for field in ('run_id', 'status', 'row_count', 'last_record_age_hours',
+                      'error_message', 'checked_at'):
+            self.assertIn(field, result, f'Missing field: {field}')
+
+
+class ApiKeyViewTest(TestCase):
+    """Phase 2 + 4: key management UI views."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apikey_view_user', password='pass')
+        self.client.login(username='apikey_view_user', password='pass')
+
+    def test_list_view_redirects_unauthenticated(self):
+        self.client.logout()
+        r = self.client.get(reverse('monitor:api_key_list'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_list_view_returns_200_when_logged_in(self):
+        r = self.client.get(reverse('monitor:api_key_list'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_create_key_creates_api_key_row(self):
+        from .models import ApiKey
+        self.assertEqual(ApiKey.objects.filter(user=self.user).count(), 0)
+        r = self.client.post(
+            reverse('monitor:api_key_create'),
+            {'name': 'my ci key'},
+        )
+        self.assertRedirects(r, reverse('monitor:api_key_list'), fetch_redirect_response=False)
+        self.assertEqual(ApiKey.objects.filter(user=self.user).count(), 1)
+        key = ApiKey.objects.get(user=self.user)
+        self.assertTrue(key.is_active)
+
+    def test_create_key_raw_key_starts_with_dp(self):
+        self.client.post(
+            reverse('monitor:api_key_create'),
+            {'name': 'dp prefix key'},
+        )
+        session = self.client.session
+        raw_key = session.get('new_api_key', '')
+        self.assertTrue(raw_key.startswith('dp_'), f'Expected dp_ prefix, got: {raw_key}')
+
+    def test_revoke_key_sets_is_active_false(self):
+        from .models import ApiKey
+        _, key = _make_api_key(self.user, name='to revoke')
+        self.assertTrue(key.is_active)
+        r = self.client.post(
+            reverse('monitor:api_key_revoke', args=[key.pk]),
+        )
+        self.assertRedirects(r, reverse('monitor:api_key_list'), fetch_redirect_response=False)
+        key.refresh_from_db()
+        self.assertFalse(key.is_active)
+
+    def test_revoke_other_users_key_returns_404(self):
+        other = User.objects.create_user('other_key_owner', password='pass')
+        _, key = _make_api_key(other, name='other key')
+        r = self.client.post(
+            reverse('monitor:api_key_revoke', args=[key.pk]),
+        )
+        self.assertEqual(r.status_code, 404)
+        key.refresh_from_db()
+        self.assertTrue(key.is_active)
+
+
+# ═════════════════════════════════════════════════════════════════
+#  Slack Webhook (slack-webhook change)
+# ═════════════════════════════════════════════════════════════════
+
+class SlackWebhookModelTest(TestCase):
+    """Unit tests for the SlackWebhook model."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('swh_model_user', password='pass')
+
+    def test_enabled_default_true(self):
+        """enabled defaults to True."""
+        from .models import SlackWebhook
+        wh = SlackWebhook.objects.create(user=self.user, name='default-test', url='https://hooks.slack.com/x')
+        self.assertTrue(wh.enabled)
+
+    def test_str_returns_name(self):
+        """__str__ returns the webhook name."""
+        from .models import SlackWebhook
+        wh = SlackWebhook.objects.create(user=self.user, name='my-webhook', url='https://hooks.slack.com/x')
+        self.assertEqual(str(wh), 'my-webhook')
+
+    def test_unique_together_user_name(self):
+        """(user, name) unique_together raises IntegrityError on duplicate."""
+        from .models import SlackWebhook
+        from django.db import IntegrityError
+        SlackWebhook.objects.create(user=self.user, name='dup-webhook', url='https://hooks.slack.com/a')
+        with self.assertRaises(IntegrityError):
+            SlackWebhook.objects.create(user=self.user, name='dup-webhook', url='https://hooks.slack.com/b')
+
+
+class SendSlackNotificationTest(TestCase):
+    """Unit tests for monitor.slack_service.send_slack_notification."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('slack_notif_user', email='slack@example.com', password='pass')
+        self.rule = make_rule(name='slack_test_rule', min_rows=10, user=self.user)
+        self.rule.notify_slack = True
+        self.rule.save()
+
+        from .models import SlackWebhook
+        self.webhook = SlackWebhook.objects.create(
+            user=self.user,
+            name='test-webhook',
+            url='https://hooks.slack.com/services/TEST',
+            enabled=True,
+        )
+
+        self.run = CheckRun.objects.create(finished_at=timezone.now())
+        self.result = RuleResult.objects.create(
+            run=self.run,
+            rule=self.rule,
+            status=RuleResult.Status.FAIL,
+        )
+
+    def _send(self, **overrides):
+        from .slack_service import send_slack_notification
+        rule = overrides.get('rule', self.rule)
+        result = overrides.get('result', self.result)
+        return send_slack_notification(rule, result)
+
+    def test_returns_false_when_notify_slack_false(self):
+        """Returns False when rule.notify_slack is False."""
+        self.rule.notify_slack = False
+        self.rule.save()
+        with patch('urllib.request.urlopen') as mock_open:
+            sent = self._send()
+        self.assertFalse(sent)
+        mock_open.assert_not_called()
+
+    def test_returns_false_when_no_enabled_webhook(self):
+        """Returns False when no enabled SlackWebhook exists for the user."""
+        self.webhook.enabled = False
+        self.webhook.save()
+        with patch('urllib.request.urlopen') as mock_open:
+            sent = self._send()
+        self.assertFalse(sent)
+        mock_open.assert_not_called()
+
+    def test_returns_false_when_cooldown_active(self):
+        """Returns False when last_slack_notified_at < 1 hour ago."""
+        from datetime import timedelta
+        self.rule.last_slack_notified_at = timezone.now() - timedelta(minutes=30)
+        self.rule.save()
+        with patch('urllib.request.urlopen') as mock_open:
+            sent = self._send()
+        self.assertFalse(sent)
+        mock_open.assert_not_called()
+
+    def test_returns_true_after_cooldown_expires(self):
+        """Returns True when last_slack_notified_at >= 1 hour ago."""
+        from datetime import timedelta
+        self.rule.last_slack_notified_at = timezone.now() - timedelta(hours=1, seconds=1)
+        self.rule.save()
+        with patch('urllib.request.urlopen'):
+            sent = self._send()
+        self.assertTrue(sent)
+
+    def test_stamps_last_slack_notified_at_on_success(self):
+        """last_slack_notified_at is set in DB after a successful POST."""
+        self.assertIsNone(self.rule.last_slack_notified_at)
+        with patch('urllib.request.urlopen'):
+            self._send()
+        self.rule.refresh_from_db()
+        self.assertIsNotNone(self.rule.last_slack_notified_at)
+
+    def test_cooldown_stamp_uses_update_not_save(self):
+        """The cooldown stamp uses .update() so auto_now updated_at is not changed."""
+        before = self.rule.updated_at
+        with patch('urllib.request.urlopen'):
+            self._send()
+        self.rule.refresh_from_db()
+        # updated_at must not move because we only call .update(last_slack_notified_at=...)
+        self.assertEqual(self.rule.updated_at, before)
+
+    def test_returns_false_and_logs_on_url_error(self):
+        """Returns False (does not raise) when urllib raises URLError."""
+        import urllib.error
+        with patch('urllib.request.urlopen', side_effect=urllib.error.URLError('timeout')), \
+             self.assertLogs('monitor.slack_service', level='ERROR'):
+            sent = self._send()
+        self.assertFalse(sent)
+
+    def test_block_kit_payload_contains_rule_name_and_view_history(self):
+        """The POSTed JSON contains the rule name and 'View History' button (if BASE_URL set)."""
+        from django.test.utils import override_settings
+        captured = []
+
+        def fake_urlopen(req, timeout=None):
+            captured.append(req)
+
+        with override_settings(BASE_URL='http://example.com'):
+            with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+                self._send()
+
+        self.assertTrue(len(captured) > 0, 'urlopen was not called')
+        import json as _json
+        payload = _json.loads(captured[0].data.decode())
+        # Fallback text must contain rule name
+        self.assertIn(self.rule.name, payload['text'])
+        # At least one block must contain 'View History'
+        blocks_str = _json.dumps(payload['blocks'])
+        self.assertIn('View History', blocks_str)
+
+
+class NotifyRuleResultTest(TestCase):
+    """Unit tests for notify_rule_result coordinator."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('coord_user', email='coord@example.com', password='pass')
+        self.rule = make_rule(name='coord_test_rule', min_rows=10, user=self.user)
+        self.run = CheckRun.objects.create(finished_at=timezone.now())
+        self.result = RuleResult.objects.create(
+            run=self.run, rule=self.rule, status=RuleResult.Status.FAIL
+        )
+
+    def test_returns_both_true_when_both_succeed(self):
+        """Returns {'email': True, 'slack': True} when both channels succeed."""
+        with patch('monitor.email_service.send_fail_notification', return_value=True), \
+             patch('monitor.email_service.send_slack_notification', return_value=True):
+            from .email_service import notify_rule_result
+            result = notify_rule_result(self.rule, self.result)
+        self.assertEqual(result, {'email': True, 'slack': True})
+
+    def test_returns_email_false_when_email_skipped(self):
+        """Returns {'email': False, 'slack': True} when email is skipped."""
+        with patch('monitor.email_service.send_fail_notification', return_value=False), \
+             patch('monitor.email_service.send_slack_notification', return_value=True):
+            from .email_service import notify_rule_result
+            result = notify_rule_result(self.rule, self.result)
+        self.assertEqual(result, {'email': False, 'slack': True})
+
+    def test_returns_slack_false_when_slack_skipped(self):
+        """Returns {'email': True, 'slack': False} when Slack is skipped."""
+        with patch('monitor.email_service.send_fail_notification', return_value=True), \
+             patch('monitor.email_service.send_slack_notification', return_value=False):
+            from .email_service import notify_rule_result
+            result = notify_rule_result(self.rule, self.result)
+        self.assertEqual(result, {'email': True, 'slack': False})
+
+
+class SlackWebhookViewsTest(TestCase):
+    """Auth-guard and happy-path tests for SlackWebhook CRUD views."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('swh_views_user', password='pass')
+        self.other_user = User.objects.create_user('swh_other_user', password='pass')
+        self.client.login(username='swh_views_user', password='pass')
+
+    def test_unauthenticated_redirects_to_login(self):
+        """Anonymous GET of slack_webhook_list returns 302 to login."""
+        self.client.logout()
+        r = self.client.get(reverse('monitor:slack_webhook_list'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_list_view_renders(self):
+        """Authenticated GET of slack_webhook_list returns 200."""
+        r = self.client.get(reverse('monitor:slack_webhook_list'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_create_saves_with_request_user(self):
+        """POST to slack_webhook_create saves the webhook with user=request.user."""
+        r = self.client.post(reverse('monitor:slack_webhook_create'), {
+            'name': 'my-alert',
+            'url': 'https://hooks.slack.com/services/ABC',
+            'enabled': 'on',
+        })
+        self.assertRedirects(r, reverse('monitor:slack_webhook_list'), fetch_redirect_response=False)
+        from .models import SlackWebhook
+        wh = SlackWebhook.objects.get(name='my-alert')
+        self.assertEqual(wh.user, self.user)
+        self.assertTrue(wh.enabled)
+
+    def test_edit_scoped_to_owner(self):
+        """Editing another user's webhook returns 404."""
+        from .models import SlackWebhook
+        other_wh = SlackWebhook.objects.create(
+            user=self.other_user,
+            name='other-hook',
+            url='https://hooks.slack.com/services/XYZ',
+        )
+        r = self.client.get(reverse('monitor:slack_webhook_edit', args=[other_wh.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_delete_removes_record(self):
+        """POST to slack_webhook_delete removes the webhook."""
+        from .models import SlackWebhook
+        wh = SlackWebhook.objects.create(
+            user=self.user,
+            name='to-delete',
+            url='https://hooks.slack.com/services/DEL',
+        )
+        r = self.client.post(reverse('monitor:slack_webhook_delete', args=[wh.pk]))
+        self.assertRedirects(r, reverse('monitor:slack_webhook_list'), fetch_redirect_response=False)
+        self.assertFalse(SlackWebhook.objects.filter(pk=wh.pk).exists())
+
+# ═══════════════════════════════════════════════════════════════════
+#  check-templates: CheckTemplatesTests + ApiTemplatesTests + TemplateUITest
+# ═══════════════════════════════════════════════════════════════════
+
+# Forbidden keywords — F3: DELETE is explicitly included
+_FORBIDDEN_KEYWORDS = (
+    'INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE',
+    'ALTER', 'CREATE', 'GRANT', 'REVOKE',
+)
+
+
+def _assert_sql_safe(test_case, sql):
+    """Assert sql starts with SELECT and contains no forbidden DML/DDL keyword."""
+    import re
+    test_case.assertTrue(
+        sql.strip().upper().startswith('SELECT'),
+        'SQL does not start with SELECT: {!r}'.format(sql),
+    )
+    for kw in _FORBIDDEN_KEYWORDS:
+        test_case.assertFalse(
+            bool(re.search(r'\b' + kw + r'\b', sql, re.IGNORECASE)),
+            'SQL contains forbidden keyword {!r}: {!r}'.format(kw, sql),
+        )
+
+
+class CheckTemplatesTests(TestCase):
+    """Unit tests for check_templates.TEMPLATES and generate_sql()."""
+
+    def setUp(self):
+        from monitor.check_templates import TEMPLATES, generate_sql
+        self.TEMPLATES = TEMPLATES
+        self.generate_sql = generate_sql
+
+    def test_template_count_is_8(self):
+        self.assertEqual(len(self.TEMPLATES), 8)
+
+    def test_each_template_has_required_keys(self):
+        for tpl in self.TEMPLATES:
+            for key in ('id', 'label', 'description', 'params', 'sql'):
+                self.assertIn(key, tpl, 'Template {!r} missing key {!r}'.format(tpl.get('id'), key))
+
+    def test_null_check_postgresql(self):
+        sql = self.generate_sql('null_check', {'table': 'public.orders', 'column': 'customer_id'}, 'postgresql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('public.orders', sql)
+        self.assertIn('customer_id', sql)
+        self.assertIn('IS NULL', sql)
+
+    def test_null_check_mysql(self):
+        sql = self.generate_sql('null_check', {'table': 'mydb.orders', 'column': 'email'}, 'mysql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('IS NULL', sql)
+
+    def test_uniqueness_postgresql(self):
+        sql = self.generate_sql('uniqueness', {'table': 'public.users', 'column': 'email'}, 'postgresql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('DISTINCT', sql)
+        self.assertIn('email', sql)
+
+    def test_uniqueness_mysql(self):
+        sql = self.generate_sql('uniqueness', {'table': 'mydb.users', 'column': 'id'}, 'mysql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('DISTINCT', sql)
+
+    def test_not_negative_postgresql(self):
+        sql = self.generate_sql('not_negative', {'table': 'public.orders', 'column': 'amount'}, 'postgresql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('amount', sql)
+        self.assertIn('>= 0', sql)
+
+    def test_not_negative_mysql(self):
+        sql = self.generate_sql('not_negative', {'table': 'mydb.orders', 'column': 'price'}, 'mysql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('>= 0', sql)
+
+    def test_future_date_postgresql(self):
+        sql = self.generate_sql('future_date', {'table': 'public.events', 'column': 'event_date'}, 'postgresql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('event_date', sql)
+        self.assertIn('NOW()', sql)
+
+    def test_future_date_mysql(self):
+        sql = self.generate_sql('future_date', {'table': 'mydb.events', 'column': 'ts'}, 'mysql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('NOW()', sql)
+
+    def test_referential_integrity_postgresql(self):
+        params = {
+            'child_table':   'public.orders',
+            'child_column':  'customer_id',
+            'parent_table':  'public.customers',
+            'parent_column': 'id',
+        }
+        sql = self.generate_sql('referential_integrity', params, 'postgresql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('public.orders', sql)
+        self.assertIn('customer_id', sql)
+        self.assertIn('public.customers', sql)
+        self.assertIn('NOT IN', sql)
+
+    def test_referential_integrity_mysql(self):
+        params = {
+            'child_table':   'mydb.orders',
+            'child_column':  'cust_id',
+            'parent_table':  'mydb.customers',
+            'parent_column': 'id',
+        }
+        sql = self.generate_sql('referential_integrity', params, 'mysql')
+        _assert_sql_safe(self, sql)
+        self.assertIn('NOT IN', sql)
+
+    def test_completeness_rate_postgresql(self):
+        sql = self.generate_sql(
+            'completeness_rate',
+            {'table': 'public.users', 'column': 'email', 'threshold': '95'},
+            'postgresql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('95', sql)
+        self.assertIn('NULLIF', sql)
+
+    def test_completeness_rate_mysql(self):
+        sql = self.generate_sql(
+            'completeness_rate',
+            {'table': 'mydb.users', 'column': 'name', 'threshold': '80'},
+            'mysql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('80', sql)
+
+    def test_row_count_equals_postgresql(self):
+        sql = self.generate_sql(
+            'row_count_equals',
+            {'table': 'public.orders', 'expected_count': '500'},
+            'postgresql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('500', sql)
+        self.assertIn('COUNT(*)', sql)
+
+    def test_row_count_equals_mysql(self):
+        sql = self.generate_sql(
+            'row_count_equals',
+            {'table': 'mydb.orders', 'expected_count': '200'},
+            'mysql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('200', sql)
+
+    def test_pattern_match_postgresql_uses_regex_operator(self):
+        sql = self.generate_sql(
+            'pattern_match',
+            {'table': 'public.users', 'column': 'email', 'pattern': '^[a-z]+'},
+            'postgresql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('!~', sql)
+        self.assertNotIn('REGEXP', sql)
+        self.assertIn('^[a-z]+', sql)
+
+    def test_pattern_match_mysql_uses_regexp(self):
+        sql = self.generate_sql(
+            'pattern_match',
+            {'table': 'mydb.users', 'column': 'email', 'pattern': '^[a-z]+'},
+            'mysql',
+        )
+        _assert_sql_safe(self, sql)
+        self.assertIn('REGEXP', sql)
+        self.assertNotIn('!~', sql)
+        self.assertIn('^[a-z]+', sql)
+
+    def test_generate_sql_raises_for_unknown_template(self):
+        with self.assertRaises(KeyError):
+            self.generate_sql('nonexistent_template', {}, 'postgresql')
+
+    def test_generate_sql_raises_for_unknown_provider(self):
+        with self.assertRaises(KeyError):
+            self.generate_sql('null_check', {'table': 't', 'column': 'c'}, 'oracle')
+
+
+class ApiTemplatesTests(TestCase):
+    """Integration tests for the GET /api/templates/ endpoint."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('tpl_api_user', password='pass')
+
+    def test_unauthenticated_redirects(self):
+        r = self.client.get('/api/templates/')
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_authenticated_returns_200(self):
+        self.client.force_login(self.user)
+        r = self.client.get('/api/templates/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_authenticated_returns_8_templates(self):
+        self.client.force_login(self.user)
+        r = self.client.get('/api/templates/')
+        data = json.loads(r.content)
+        self.assertIn('templates', data)
+        self.assertEqual(len(data['templates']), 8)
+
+    def test_each_template_has_required_keys(self):
+        self.client.force_login(self.user)
+        r = self.client.get('/api/templates/')
+        data = json.loads(r.content)
+        for tpl in data['templates']:
+            for key in ('id', 'label', 'description', 'params', 'sql'):
+                self.assertIn(
+                    key, tpl,
+                    'Template {!r} missing key {!r}'.format(tpl.get('id'), key),
+                )
+
+    def test_post_not_allowed(self):
+        self.client.force_login(self.user)
+        r = self.client.post('/api/templates/', {})
+        self.assertEqual(r.status_code, 405)
+
+
+class TemplateUITest(TestCase):
+    """Verify the rule_create page includes the template gallery section."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('tpl_ui_user', password='pass')
+        self.client.force_login(self.user)
+
+    def test_rule_create_has_template_gallery_section(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'tpl-gallery-section')
+
+    def test_rule_create_has_template_apply_button(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertContains(r, 'tpl-apply-btn')
+
+    def test_rule_create_has_api_templates_fetch(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertContains(r, '/api/templates/')
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Row Sampling — Phase 5 Tests
+# ═══════════════════════════════════════════════════════════════════
+
+import datetime as _dt
+import decimal as _decimal
+
+
+class SerializeRowTest(TestCase):
+    """Unit tests for _serialize_row — JSON serialization of DBAPI2 rows."""
+
+    def _desc(self, *names):
+        """Build a minimal cursor.description-like list of col descriptors."""
+        return [(name,) for name in names]
+
+    def test_datetime_converted_to_isoformat(self):
+        from .services import _serialize_row
+        dt_val = _dt.datetime(2024, 3, 15, 10, 30, 0)
+        row = _serialize_row(self._desc('created_at'), (dt_val,))
+        self.assertEqual(row['created_at'], dt_val.isoformat())
+
+    def test_date_converted_to_isoformat(self):
+        from .services import _serialize_row
+        d_val = _dt.date(2024, 3, 15)
+        row = _serialize_row(self._desc('birth_date'), (d_val,))
+        self.assertEqual(row['birth_date'], d_val.isoformat())
+
+    def test_decimal_converted_to_str(self):
+        from .services import _serialize_row
+        dec_val = _decimal.Decimal('123.456')
+        row = _serialize_row(self._desc('price'), (dec_val,))
+        self.assertEqual(row['price'], '123.456')
+
+    def test_primitives_pass_through(self):
+        from .services import _serialize_row
+        row = _serialize_row(
+            self._desc('id', 'name', 'score', 'active', 'nullable'),
+            (42, 'hello', 3.14, True, None),
+        )
+        self.assertEqual(row['id'], 42)
+        self.assertEqual(row['name'], 'hello')
+        self.assertAlmostEqual(row['score'], 3.14)
+        self.assertTrue(row['active'])
+        self.assertIsNone(row['nullable'])
+
+    def test_mixed_row_serialized_correctly(self):
+        from .services import _serialize_row
+        dt_val = _dt.datetime(2024, 1, 1, 0, 0, 0)
+        dec_val = _decimal.Decimal('9.99')
+        row = _serialize_row(
+            self._desc('ts', 'amount', 'label'),
+            (dt_val, dec_val, 'test'),
+        )
+        self.assertEqual(row['ts'], dt_val.isoformat())
+        self.assertEqual(row['amount'], '9.99')
+        self.assertEqual(row['label'], 'test')
+
+
+class FetchSampleRowsTest(TestCase):
+    """Unit tests for _fetch_sample_rows — cursor-based sampling helper."""
+
+    def _mock_cursor(self, rows, col_names):
+        """Build a mock cursor with description and fetchmany."""
+        cur = MagicMock()
+        cur.description = [(name,) for name in col_names]
+        cur.fetchmany.return_value = rows
+        return cur
+
+    def test_happy_path_returns_list_of_dicts(self):
+        from .services import _fetch_sample_rows
+        cur = self._mock_cursor(
+            [(1, 'alice'), (2, 'bob')],
+            ['id', 'name'],
+        )
+        result = _fetch_sample_rows(cur, 'SELECT * FROM t LIMIT 5')
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], {'id': 1, 'name': 'alice'})
+        self.assertEqual(result[1], {'id': 2, 'name': 'bob'})
+
+    def test_cursor_exception_returns_none(self):
+        from .services import _fetch_sample_rows
+        cur = MagicMock()
+        cur.execute.side_effect = Exception('DB error')
+        result = _fetch_sample_rows(cur, 'SELECT * FROM t LIMIT 5')
+        self.assertIsNone(result)
+
+    def test_respects_limit_param(self):
+        from .services import _fetch_sample_rows
+        cur = self._mock_cursor([(1, 'x')], ['id', 'val'])
+        _fetch_sample_rows(cur, 'SELECT * FROM t LIMIT 3', limit=3)
+        cur.fetchmany.assert_called_once_with(3)
+
+    def test_params_passed_to_execute(self):
+        from .services import _fetch_sample_rows
+        cur = self._mock_cursor([], ['id'])
+        _fetch_sample_rows(cur, 'SELECT * FROM t WHERE id = %s', params=(42,))
+        cur.execute.assert_called_once_with('SELECT * FROM t WHERE id = %s', (42,))
+
+
+class SamplingVolumeFreshnessTest(TestCase):
+    """Verify sample_rows is populated on FAIL and absent on OK for volume/freshness rules."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sampling_vol_user', password='pass')
+
+    def _make_two_cursor_conn(self, primary_fetchone, sample_fetchmany, sample_col_names):
+        """Return a conn mock where first cursor call is primary, second is sample."""
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = primary_fetchone
+
+        sample_cur = MagicMock()
+        sample_cur.__enter__ = MagicMock(return_value=sample_cur)
+        sample_cur.__exit__ = MagicMock(return_value=False)
+        sample_cur.description = [(name,) for name in sample_col_names]
+        sample_cur.fetchmany.return_value = sample_fetchmany
+
+        conn = MagicMock()
+        conn.cursor.side_effect = [primary_cur, sample_cur]
+        return conn
+
+    def test_volume_fail_returns_sample_rows(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(min_rows=100, user=self.user)
+        conn = self._make_two_cursor_conn(
+            primary_fetchone=(3,),
+            sample_fetchmany=[(1, 'a'), (2, 'b')],
+            sample_col_names=['id', 'name'],
+        )
+        result = _check_volume_freshness(conn, rule)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIsNotNone(result['sample_rows'])
+        self.assertIsInstance(result['sample_rows'], list)
+        self.assertEqual(len(result['sample_rows']), 2)
+
+    def test_volume_ok_no_sample_rows(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(min_rows=1, user=self.user)
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = (50,)
+        conn = MagicMock()
+        conn.cursor.return_value = primary_cur
+        result = _check_volume_freshness(conn, rule)
+        self.assertEqual(result['status'], 'OK')
+        self.assertIsNone(result['sample_rows'])
+
+    def test_freshness_fail_returns_sample_rows(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(ts_col='created_at', max_age=1, user=self.user)
+        conn = self._make_two_cursor_conn(
+            primary_fetchone=(5.0,),  # 5 hours > max_age=1 → FAIL
+            sample_fetchmany=[(10, '2024-01-01')],
+            sample_col_names=['id', 'created_at'],
+        )
+        result = _check_volume_freshness(conn, rule)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIsNotNone(result['sample_rows'])
+
+    def test_sampling_failure_does_not_convert_fail_to_error(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(min_rows=100, user=self.user)
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = (3,)
+
+        sample_cur = MagicMock()
+        sample_cur.__enter__ = MagicMock(return_value=sample_cur)
+        sample_cur.__exit__ = MagicMock(return_value=False)
+        sample_cur.execute.side_effect = Exception('DB error during sampling')
+
+        conn = MagicMock()
+        conn.cursor.side_effect = [primary_cur, sample_cur]
+        result = _check_volume_freshness(conn, rule)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIsNone(result['sample_rows'])
+
+
+class SamplingCustomSQLTest(TestCase):
+    """Verify sample_rows is populated on FAIL and absent on OK for custom SQL rules."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sampling_sql_user', password='pass')
+
+    def _make_custom_sql_conn(self, primary_fetchone, sample_fetchmany=None, sample_col_names=None):
+        """Return a conn mock for custom SQL: first cursor for primary check, second for sampling."""
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = primary_fetchone
+
+        if sample_fetchmany is not None:
+            sample_cur = MagicMock()
+            sample_cur.__enter__ = MagicMock(return_value=sample_cur)
+            sample_cur.__exit__ = MagicMock(return_value=False)
+            sample_cur.description = [(name,) for name in (sample_col_names or [])]
+            sample_cur.fetchmany.return_value = sample_fetchmany
+
+            conn = MagicMock()
+            conn.cursor.side_effect = [primary_cur, sample_cur]
+        else:
+            conn = MagicMock()
+            conn.cursor.return_value = primary_cur
+
+        return conn
+
+    def test_custom_sql_fail_returns_sample_rows(self):
+        from .services import _check_custom_sql
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT false', user=self.user)
+        conn = self._make_custom_sql_conn(
+            primary_fetchone=(False,),
+            sample_fetchmany=[(1, 'test')],
+            sample_col_names=['id', 'name'],
+        )
+        result = _check_custom_sql(conn, rule)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIsNotNone(result['sample_rows'])
+        self.assertIsInstance(result['sample_rows'], list)
+
+    def test_custom_sql_ok_no_sample_rows(self):
+        from .services import _check_custom_sql
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT true', user=self.user)
+        conn = self._make_custom_sql_conn(primary_fetchone=(True,))
+        result = _check_custom_sql(conn, rule)
+        self.assertEqual(result['status'], 'OK')
+        self.assertIsNone(result['sample_rows'])
+
+    def test_custom_sql_empty_result_fail_returns_sample_rows(self):
+        from .services import _check_custom_sql
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1 WHERE false', user=self.user)
+        conn = self._make_custom_sql_conn(
+            primary_fetchone=None,  # empty resultset -> FAIL
+            sample_fetchmany=[],
+            sample_col_names=[],
+        )
+        result = _check_custom_sql(conn, rule)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIsInstance(result['sample_rows'], list)
+
+
+class SamplingRunSingleRuleTest(TestCase):
+    """Verify run_single_rule propagates sample_rows to the persisted RuleResult."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sampling_run_user', password='pass')
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_fail_result_persists_sample_rows(self, mock_connect):
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = (3,)  # below min_rows=1000 -> FAIL
+
+        sample_cur = MagicMock()
+        sample_cur.__enter__ = MagicMock(return_value=sample_cur)
+        sample_cur.__exit__ = MagicMock(return_value=False)
+        sample_cur.description = [('id',), ('name',)]
+        sample_cur.fetchmany.return_value = [(1, 'alice'), (2, 'bob')]
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.side_effect = [primary_cur, sample_cur]
+        mock_connect.return_value = mock_conn
+
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=1000, connection=conn, user=self.user)
+        from .services import run_single_rule
+        result = run_single_rule(rule)
+
+        self.assertEqual(result.status, 'FAIL')
+        result.refresh_from_db()
+        self.assertIsNotNone(result.sample_rows)
+        self.assertIsInstance(result.sample_rows, list)
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_ok_result_has_null_sample_rows(self, mock_connect):
+        primary_cur = MagicMock()
+        primary_cur.__enter__ = MagicMock(return_value=primary_cur)
+        primary_cur.__exit__ = MagicMock(return_value=False)
+        primary_cur.fetchone.return_value = (1000,)  # above min_rows=10 -> OK
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = primary_cur
+        mock_connect.return_value = mock_conn
+
+        conn = make_connection(name='ok_sample_conn', user=self.user)
+        rule = make_rule(name='ok_sample_rule', min_rows=10, connection=conn, user=self.user)
+        from .services import run_single_rule
+        result = run_single_rule(rule)
+
+        self.assertEqual(result.status, 'OK')
+        result.refresh_from_db()
+        self.assertIsNone(result.sample_rows)
+
+
+class SamplingHistoryDisplayTest(TestCase):
+    """Verify rule_history renders sample-toggle button for FAIL results with sample_rows."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sampling_view_user', password='pass')
+        self.client.login(username='sampling_view_user', password='pass')
+
+    def test_sample_rows_toggle_visible_for_fail_result(self):
+        rule = make_rule(min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(
+            run=run, rule=rule, status='FAIL', row_count=3,
+            sample_rows=[{'id': 1, 'name': 'test'}, {'id': 2, 'name': 'other'}],
+        )
+        r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
+        # The button element should be rendered (not just the CSS class)
+        self.assertContains(r, 'class="sample-toggle"')
+
+    def test_sample_rows_null_shows_no_toggle(self):
+        rule = make_rule(min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(
+            run=run, rule=rule, status='FAIL', row_count=3,
+            sample_rows=None,
+        )
+        r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
+        # Check that no sample-toggle button is rendered (CSS class exists in <style> but no button)
+        self.assertNotContains(r, 'class="sample-toggle"')
+
+    def test_ok_result_shows_no_sample_toggle(self):
+        rule = make_rule(min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(
+            run=run, rule=rule, status='OK', row_count=100,
+            sample_rows=None,
+        )
+        r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
+        # Check that no sample-toggle button is rendered
+        self.assertNotContains(r, 'class="sample-toggle"')
+
+    def test_sample_table_column_headers_rendered(self):
+        rule = make_rule(min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(
+            run=run, rule=rule, status='FAIL', row_count=3,
+            sample_rows=[{'id': 1, 'username': 'alice'}],
+        )
+        r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
+        self.assertContains(r, 'username')
+
+# =================================================================
+#  REST API -- ApiKey model, auth decorator, and endpoints
+# =================================================================
+
+class ApiKeyModelTest(TestCase):
+    """ApiKey model fields, uniqueness, and __str__."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apikey_model_user', password='pass')
+
+    def test_create_api_key(self):
+        from .models import ApiKey
+        key = ApiKey.objects.create(user=self.user, name='test key', key_hash='a' * 64)
+        self.assertEqual(key.name, 'test key')
+        self.assertTrue(key.is_active)
+        self.assertIsNone(key.last_used_at)
+
+    def test_key_hash_uniqueness_enforced(self):
+        """Two rows with the same key_hash should raise IntegrityError."""
+        from django.db import IntegrityError
+        from .models import ApiKey
+        ApiKey.objects.create(user=self.user, name='k1', key_hash='b' * 64)
+        with self.assertRaises(IntegrityError):
+            ApiKey.objects.create(user=self.user, name='k2', key_hash='b' * 64)
+
+    def test_user_name_unique_together(self):
+        """Two keys with the same user+name should raise IntegrityError."""
+        from django.db import IntegrityError
+        from .models import ApiKey
+        ApiKey.objects.create(user=self.user, name='dup', key_hash='c' * 64)
+        with self.assertRaises(IntegrityError):
+            ApiKey.objects.create(user=self.user, name='dup', key_hash='d' * 64)
+
+    def test_str(self):
+        from .models import ApiKey
+        key = ApiKey.objects.create(user=self.user, name='ci key', key_hash='e' * 64)
+        self.assertIn('ci key', str(key))
+        self.assertIn(self.user.username, str(key))
+
+
+def _make_api_key(user, name='test', raw='testrawkey'):
+    """Create an ApiKey row and return (raw_key_string, ApiKey instance)."""
+    import hashlib as _hl
+    from monitor.models import ApiKey
+    key_hash = _hl.sha256(raw.encode()).hexdigest()
+    api_key = ApiKey.objects.create(user=user, name=name, key_hash=key_hash)
+    return raw, api_key
+
+
+class ApiAuthTest(TestCase):
+    """require_api_key decorator: missing/invalid/inactive key, valid key."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apiauth_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='auth test')
+
+    def test_missing_auth_header_returns_401(self):
+        r = self.client.get('/api/v1/rules')
+        self.assertEqual(r.status_code, 401)
+        data = json.loads(r.content)
+        self.assertIn('error', data)
+
+    def test_wrong_scheme_returns_401(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Token {self.raw}')
+        self.assertEqual(r.status_code, 401)
+
+    def test_invalid_key_returns_401(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION='Bearer completely_wrong')
+        self.assertEqual(r.status_code, 401)
+        data = json.loads(r.content)
+        self.assertEqual(data['error'], 'invalid API key')
+
+    def test_inactive_key_returns_401(self):
+        from .models import ApiKey
+        ApiKey.objects.filter(pk=self.api_key.pk).update(is_active=False)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 401)
+
+    def test_valid_key_returns_200(self):
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 200)
+
+    def test_valid_key_updates_last_used_at(self):
+        from .models import ApiKey
+        self.assertIsNone(self.api_key.last_used_at)
+        self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.api_key.refresh_from_db()
+        self.assertIsNotNone(self.api_key.last_used_at)
+
+
+from django.test.utils import override_settings as _ov_for_api
+_LOCMEM_API = {'CACHES': {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}}
+
+
+class RateLimitTest(TestCase):
+    """Rate limiting: under limit passes, 61st request fails."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ratelimit_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='rate test', raw='ratelimitrawkey')
+
+    def test_under_limit_passes(self):
+        from django.core.cache import cache
+        cache.clear()
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 200)
+
+    @_ov_for_api(**_LOCMEM_API)
+    def test_61st_request_returns_429(self):
+        """After 60 requests in the same minute bucket, the 61st returns 429."""
+        from django.core.cache import cache
+        from monitor.api_auth import _RATE_LIMIT
+        cache.clear()
+        import time
+        bucket = int(time.time() // 60)
+        cache_key = f'rl:{self.api_key.pk}:{bucket}'
+        cache.set(cache_key, _RATE_LIMIT, timeout=120)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=f'Bearer {self.raw}')
+        self.assertEqual(r.status_code, 429)
+        data = json.loads(r.content)
+        self.assertIn('retry_after_seconds', data)
+        self.assertGreaterEqual(data['retry_after_seconds'], 0)
+
+
+class ApiEndpointsTest(TestCase):
+    """API endpoint tests: auth, isolation, response shape."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('api_endpoints_user', password='pass')
+        self.other_user = User.objects.create_user('api_other_user', password='pass')
+        self.raw, self.api_key = _make_api_key(self.user, name='endpoints test', raw='endpointsrawkey')
+
+    def _auth(self):
+        return f'Bearer {self.raw}'
+
+    def test_list_rules_without_auth_returns_401(self):
+        r = self.client.get('/api/v1/rules')
+        self.assertEqual(r.status_code, 401)
+
+    def test_list_rules_returns_only_own_rules(self):
+        make_rule(name='my_rule', min_rows=1, user=self.user)
+        make_rule(name='other_rule', min_rows=1, user=self.other_user)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        names = [rule['name'] for rule in data['rules']]
+        self.assertIn('my_rule', names)
+        self.assertNotIn('other_rule', names)
+
+    def test_list_rules_response_shape(self):
+        make_rule(name='shape_rule', min_rows=1, user=self.user)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=self._auth())
+        data = json.loads(r.content)
+        self.assertIn('rules', data)
+        rule = data['rules'][0]
+        for field in ('id', 'name', 'schema_name', 'table_name', 'rule_type',
+                      'schedule_type', 'created_at', 'updated_at'):
+            self.assertIn(field, rule, f'Missing field: {field}')
+
+    def test_run_rule_returns_run_id_and_status(self):
+        from unittest.mock import patch, MagicMock
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=1, connection=conn, user=self.user)
+        with patch('monitor.api_views.run_single_rule') as mock_run:
+            mock_result = MagicMock()
+            mock_result.run_id = 99
+            mock_result.status = 'OK'
+            mock_result.row_count = 10
+            mock_result.last_record_age_hours = None
+            mock_result.error_message = ''
+            mock_result.checked_at.isoformat.return_value = '2026-01-01T00:00:00+00:00'
+            mock_run.return_value = mock_result
+            r = self.client.post(
+                f'/api/v1/rules/{rule.pk}/run',
+                HTTP_AUTHORIZATION=self._auth(),
+            )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('run_id', data)
+        self.assertIn('status', data)
+
+    def test_run_rule_other_user_returns_404(self):
+        other_rule = make_rule(name='other_user_rule', min_rows=1, user=self.other_user)
+        r = self.client.post(
+            f'/api/v1/rules/{other_rule.pk}/run',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_run_all_returns_run_id_and_counts(self):
+        from unittest.mock import patch, MagicMock
+        with patch('monitor.api_views.run_checks_for_user') as mock_run:
+            mock_run_obj = MagicMock()
+            mock_run_obj.pk = 55
+            mock_run_obj.ok_count = 0
+            mock_run_obj.fail_count = 0
+            mock_run_obj.error_count = 0
+            mock_run_obj.started_at.isoformat.return_value = '2026-01-01T00:00:00+00:00'
+            mock_run_obj.finished_at = None
+            mock_run.return_value = mock_run_obj
+            r = self.client.post('/api/v1/rules/run-all', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('run_id', data)
+        self.assertIn('ok_count', data)
+        self.assertIn('fail_count', data)
+        self.assertIn('error_count', data)
+
+    def test_get_results_nonexistent_rule_returns_404(self):
+        r = self.client.get('/api/v1/rules/99999/results', HTTP_AUTHORIZATION=self._auth())
+        self.assertEqual(r.status_code, 404)
+
+    def test_get_results_other_user_rule_returns_404(self):
+        other_rule = make_rule(name='other_results_rule', min_rows=1, user=self.other_user)
+        r = self.client.get(
+            f'/api/v1/rules/{other_rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_get_results_returns_last_20(self):
+        rule = make_rule(name='results_rule', min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        for i in range(25):
+            RuleResult.objects.create(run=run, rule=rule, status='OK')
+        r = self.client.get(
+            f'/api/v1/rules/{rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertIn('results', data)
+        self.assertLessEqual(len(data['results']), 20)
+        self.assertEqual(data['rule_id'], rule.pk)
+
+    def test_get_results_response_shape(self):
+        rule = make_rule(name='shape_results_rule', min_rows=1, user=self.user)
+        run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(run=run, rule=rule, status='OK')
+        r = self.client.get(
+            f'/api/v1/rules/{rule.pk}/results',
+            HTTP_AUTHORIZATION=self._auth(),
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        result = data['results'][0]
+        for field in ('run_id', 'status', 'row_count', 'last_record_age_hours',
+                      'error_message', 'checked_at'):
+            self.assertIn(field, result, f'Missing field: {field}')
+
+
+class ApiKeyViewTest(TestCase):
+    """Key management UI views."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('apikey_view_user', password='pass')
+        self.client.login(username='apikey_view_user', password='pass')
+
+    def test_list_view_redirects_unauthenticated(self):
+        self.client.logout()
+        r = self.client.get(reverse('monitor:api_key_list'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_list_view_returns_200_when_logged_in(self):
+        r = self.client.get(reverse('monitor:api_key_list'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_create_key_creates_api_key_row(self):
+        from .models import ApiKey
+        self.assertEqual(ApiKey.objects.filter(user=self.user).count(), 0)
+        r = self.client.post(reverse('monitor:api_key_create'), {'name': 'my ci key'})
+        self.assertRedirects(r, reverse('monitor:api_key_list'), fetch_redirect_response=False)
+        self.assertEqual(ApiKey.objects.filter(user=self.user).count(), 1)
+        key = ApiKey.objects.get(user=self.user)
+        self.assertTrue(key.is_active)
+
+    def test_create_key_raw_key_starts_with_dp(self):
+        """After creation, the session contains a raw key starting with dp_."""
+        self.client.post(reverse('monitor:api_key_create'), {'name': 'dp prefix key'})
+        session = self.client.session
+        raw_key = session.get('new_api_key', '')
+        self.assertTrue(raw_key.startswith('dp_'), f'Expected dp_ prefix, got: {raw_key}')
+
+    def test_revoke_key_sets_is_active_false(self):
+        from .models import ApiKey
+        _, key = _make_api_key(self.user, name='to revoke')
+        self.assertTrue(key.is_active)
+        r = self.client.post(reverse('monitor:api_key_revoke', args=[key.pk]))
+        self.assertRedirects(r, reverse('monitor:api_key_list'), fetch_redirect_response=False)
+        key.refresh_from_db()
+        self.assertFalse(key.is_active)
+
+    def test_revoke_other_users_key_returns_404(self):
+        other = User.objects.create_user('other_key_owner', password='pass')
+        _, key = _make_api_key(other, name='other key')
+        r = self.client.post(reverse('monitor:api_key_revoke', args=[key.pk]))
+        self.assertEqual(r.status_code, 404)
+        key.refresh_from_db()
+        self.assertTrue(key.is_active)  # unchanged

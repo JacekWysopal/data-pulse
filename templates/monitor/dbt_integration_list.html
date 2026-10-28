@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block breadcrumb %}<span class="dp-breadcrumb-sep">›</span><span class="dp-breadcrumb-current">Integrations</span>{% endblock %}
+
+{% block extra_head %}
+<style>
+  .int-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  }
+  .int-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .int-name { font-size: 1rem; font-weight: 700; letter-spacing: -0.3px; }
+  .int-jobid { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+  .int-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+  .int-rules-count {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.2);
+    color: var(--accent-hover); font-size: 0.72rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 animate-fadeup">
+  <div>
+    <h1 style="font-size:1.4rem;margin-bottom:0.25rem">dbt Integrations</h1>
+    <p style="color:var(--text-muted);font-size:0.82rem;margin:0">Trigger DataPulse rules after a dbt job completes via HMAC-signed webhook.</p>
+  </div>
+  <a href="{% url 'monitor:dbt_integration_create' %}" class="btn-dp btn-dp-primary animate-fadeup">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    New integration
+  </a>
+</div>
+
+{% if integrations %}
+<div class="d-flex flex-column gap-3">
+  {% for integration in integrations %}
+  <div class="int-card animate-fadeup" style="animation-delay:{{ forloop.counter0 }}00ms">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <div style="flex:1;min-width:0">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="int-name">{{ integration.name }}</span>
+          <span class="int-rules-count">{{ integration.rules.count }} rule{{ integration.rules.count|pluralize }}</span>
+        </div>
+        <div class="int-jobid">job_id: {{ integration.job_id }}</div>
+        {% if integration.connection %}
+          <div class="int-meta"><span>Connection: {{ integration.connection.name }}</span></div>
+        {% endif %}
+        <div class="int-meta">
+          <span>Added {{ integration.created_at|date:"Y-m-d" }}</span>
+          <span>Webhook: <code>/api/v1/webhooks/dbt/</code></span>
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-shrink-0">
+        <a href="{% url 'monitor:dbt_integration_edit' integration.pk %}" class="btn-dp btn-dp-ghost btn-dp-sm">Edit</a>
+        <a href="{% url 'monitor:dbt_integration_delete' integration.pk %}" class="btn-dp btn-dp-danger btn-dp-sm">Delete</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="animate-fadeup animate-fadeup-2" style="text-align:center;padding:2rem;color:var(--text-muted)">
+  <div style="font-size:0.85rem">No integrations yet — click <strong style="color:var(--text-secondary)">New integration</strong> to connect dbt.</div>
+</div>
+{% endif %}
+{% endblock %}

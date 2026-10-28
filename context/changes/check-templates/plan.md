@@ -315,9 +315,9 @@ No database migration required. No changes to existing model fields or constrain
 
 #### Automated
 
-- [ ] 1.1 `python manage.py check` passes with no errors
-- [ ] 1.2 `python -c "from monitor.check_templates import TEMPLATES, generate_sql; assert len(TEMPLATES) == 8"` exits 0
-- [ ] 1.3 GET `/api/templates/` unauthenticated returns HTTP 302
+- [x] 1.1 `python manage.py check` passes with no errors
+- [x] 1.2 `python -c "from monitor.check_templates import TEMPLATES, generate_sql; assert len(TEMPLATES) == 8"` exits 0
+- [x] 1.3 GET `/api/templates/` unauthenticated returns HTTP 302
 
 #### Manual
 
@@ -327,7 +327,7 @@ No database migration required. No changes to existing model fields or constrain
 
 #### Automated
 
-- [ ] 2.1 `python manage.py check` passes
+- [x] 2.1 `python manage.py check` passes
 
 #### Manual
 
@@ -342,9 +342,9 @@ No database migration required. No changes to existing model fields or constrain
 
 #### Automated
 
-- [ ] 3.1 `python manage.py test monitor.tests.CheckTemplatesTests` passes
-- [ ] 3.2 `python manage.py test monitor.tests.ApiTemplatesTests` passes
-- [ ] 3.3 `python manage.py test monitor` passes with no regressions
+- [x] 3.1 `python manage.py test monitor.tests.CheckTemplatesTests` passes
+- [x] 3.2 `python manage.py test monitor.tests.ApiTemplatesTests` passes
+- [x] 3.3 `python manage.py test monitor` passes with no regressions
 
 #### Manual
 

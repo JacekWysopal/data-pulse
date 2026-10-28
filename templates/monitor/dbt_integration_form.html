@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block breadcrumb %}
+  <span class="dp-breadcrumb-sep">›</span>
+  <a href="{% url 'monitor:dbt_integration_list' %}" style="color:var(--text-muted)">Integrations</a>
+  <span class="dp-breadcrumb-sep">›</span>
+  <span class="dp-breadcrumb-current">{{ action }}</span>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .form-card {
+    max-width: 600px;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+  }
+  .form-section-label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+    margin-bottom: 1rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .field-error { color: var(--fail); font-size: 0.75rem; margin-top: 0.3rem; }
+  .secret-box {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .secret-box-title {
+    font-size: 0.75rem; font-weight: 700; color: var(--ok); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 0.5rem;
+  }
+  .secret-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    word-break: break-all;
+    margin-bottom: 0.75rem;
+  }
+  .secret-warn {
+    font-size: 0.75rem; color: var(--ok); opacity: 0.85;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 animate-fadeup">
+  <a href="{% url 'monitor:dbt_integration_list' %}" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Integrations
+  </a>
+  <h1 style="font-size:1.4rem;margin-top:0.5rem;margin-bottom:0">
+    {{ action }}{% if created_name %}: {{ created_name }}{% endif %}
+  </h1>
+</div>
+
+{% if raw_secret_key %}
+<div class="secret-box animate-fadeup">
+  <div class="secret-box-title">⚑ Integration created — copy your secret key now</div>
+  <div class="secret-value" id="secret-val">{{ raw_secret_key }}</div>
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <button type="button" class="btn-dp btn-dp-ghost btn-dp-sm" onclick="copySecret()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M1 8V1h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Copy to clipboard
+    </button>
+    <span id="copy-ok" style="font-size:0.75rem;color:var(--ok);display:none">✓ Copied!</span>
+  </div>
+  <div class="secret-warn">⚠ This secret will not be shown again. Store it securely before leaving this page.</div>
+</div>
+<hr style="margin:1.5rem 0">
+<div class="animate-fadeup animate-fadeup-1" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1.5rem">
+  Create another integration below, or <a href="{% url 'monitor:dbt_integration_list' %}">return to the list</a>.
+</div>
+{% endif %}
+
+<div class="form-card animate-fadeup {% if raw_secret_key %}animate-fadeup-2{% else %}animate-fadeup-1{% endif %}">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="dp-alert dp-alert-danger mb-3">✗ {{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="form-section-label">Identity</div>
+
+    <div class="mb-3">
+      <label for="{{ form.name.id_for_label }}" class="form-label">Integration name</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="mb-4">
+      <label for="{{ form.job_id.id_for_label }}" class="form-label">dbt Job ID</label>
+      {{ form.job_id }}
+      <div class="form-text">The dbt Cloud numeric job ID, or any string you use in a dbt Core <code>on-run-end</code> hook.</div>
+      {% if form.job_id.errors %}<div class="field-error">✗ {{ form.job_id.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-section-label">Mapping</div>
+
+    <div class="mb-3">
+      <label for="{{ form.connection.id_for_label }}" class="form-label">
+        Connection
+        <span style="font-size:0.7rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);padding:1px 6px;border-radius:4px;margin-left:6px">optional</span>
+      </label>
+      {{ form.connection }}
+      <div class="form-text">For reference — the connection used when rules run is determined by each rule's own connection.</div>
+      {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="mb-4">
+      <label for="{{ form.rules.id_for_label }}" class="form-label">
+        Rules to trigger
+        <span style="font-size:0.7rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);padding:1px 6px;border-radius:4px;margin-left:6px">Ctrl/Cmd+click to multi-select</span>
+      </label>
+      {{ form.rules }}
+      {% if form.rules.errors %}<div class="field-error">✗ {{ form.rules.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    {% if not integration %}
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;padding:0.6rem 0.875rem;background:var(--accent-dim);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius)">
+      🔑 A secret key will be generated automatically on save. Copy it from the confirmation box before leaving.
+    </div>
+    {% else %}
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;padding:0.6rem 0.875rem;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius)">
+      🔒 The secret key is not shown here. To rotate the secret, delete this integration and create a new one.
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
+      <button type="submit" class="btn-dp btn-dp-primary">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Save integration
+      </button>
+      <a href="{% url 'monitor:dbt_integration_list' %}" class="btn-dp btn-dp-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function copySecret() {
+  var val = document.getElementById('secret-val');
+  if (!val) return;
+  navigator.clipboard.writeText(val.textContent.trim()).then(function() {
+    var ok = document.getElementById('copy-ok');
+    if (ok) { ok.style.display = 'inline'; setTimeout(function(){ ok.style.display = 'none'; }, 2000); }
+  });
+}
+</script>
+{% endblock %}
