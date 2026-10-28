@@ -296,6 +296,7 @@ w GitHub Packages. Zespół BIT instaluje przez `npm install`.
 - **M-02** zamknięty 2026-10-27. S-04 schema introspection, S-05 rule builder, S-06 custom SQL, S-07 filters, S-08 connection badge.
 - **M-03** zamknięty 2026-10-28. S-09 repo-map (10x-repo-map skill), S-10 agent CI review. S-11 skipped (solo project).
 - **M-04** zamknięty 2026-10-29. S-12 multi-tenancy, S-13 email notifications, S-14 MySQL, S-15 advanced scheduler, S-16 Slack Soon badge.
+- **M-05** zamknięty 2026-10-28. S-18 Slack webhooks, S-19 check templates, S-20 REST API, S-21 alert digest, S-22 sparklines, S-23 row sampling, S-24 dbt integration. 70 plików, 11k+ linii kodu, pełny 10xWorkflow.
 
 ---
 ---
@@ -416,7 +417,7 @@ Model SlackNotification istnieje w bazie (gotowy do aktywacji).
 ---
 milestone_seq: 5
 milestone_id: m-05-power-features
-milestone_status: open
+milestone_status: done
 main_goal: value
 north_star: S-18
 top_blocker: slack-webhook
@@ -426,7 +427,7 @@ top_blocker: slack-webhook
 
 **M-05 — Power Features: Notifications, Templates, API, Observability**
 
-Status: open
+Status: done
 Źródło: research session 2026-10-28 — deep competitive analysis
 
 Zakres: 7 funkcji które wyróżniają DataPulse na rynku:
@@ -438,13 +439,13 @@ Slack webhooks, check templates, REST API, alert digest, sparklines, row samplin
 
 | ID | Slice | Prereqs | Status |
 |---|---|---|---|
-| S-18 | Slack/Teams webhook notifications ⭐ | — | new |
-| S-19 | Check templates — null, uniqueness, referential integrity | — | new |
-| S-20 | REST API + API keys | — | planning |
-| S-21 | Alert digest — group notifications per run | S-18 | new |
-| S-22 | Trend sparklines — history charts in rule list | — | new |
-| S-23 | Row sampling on failure — show example failing rows | — | new |
-| S-24 | dbt webhook integration | S-20 | new |
+| S-18 | Slack/Teams webhook notifications ⭐ | — | implemented |
+| S-19 | Check templates — null, uniqueness, referential integrity | — | implemented |
+| S-20 | REST API + API keys | — | implemented |
+| S-21 | Alert digest — group notifications per run | S-18 | implemented |
+| S-22 | Trend sparklines — history charts in rule list | — | implemented |
+| S-23 | Row sampling on failure — show example failing rows | — | implemented |
+| S-24 | dbt webhook integration | S-20 | implemented |
 
 ---
 
