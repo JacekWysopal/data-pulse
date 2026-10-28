@@ -1,0 +1,18 @@
+DataPulse — Rule Check Failure
+================================
+
+Rule:   {{ rule.name }}
+Status: {{ result.status }}
+Time:   {{ result.checked_at }}
+
+{% if rule.schema_name and rule.table_name %}Table:  {{ rule.schema_name }}.{{ rule.table_name }}{% else %}Type:   Custom SQL{% endif %}
+
+{% if result.row_count is not None %}Row count:    {{ result.row_count }}{% endif %}
+{% if result.last_record_age_hours is not None %}Record age:   {{ result.last_record_age_hours|floatformat:1 }} hours{% endif %}
+{% if result.error_message %}Error message: {{ result.error_message }}{% endif %}
+
+To run the rule again, log in to DataPulse and click "Run check" on the rule.
+
+--
+This email was sent by DataPulse because "Notify on failure" is enabled for this rule.
+Cooldown: at most one email per hour per rule.

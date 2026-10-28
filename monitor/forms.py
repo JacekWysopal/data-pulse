@@ -1,3 +1,4 @@
+from croniter import croniter
 from django import forms
 
 from .models import Connection, Rule
@@ -10,15 +11,16 @@ class ConnectionForm(forms.ModelForm):
             render_value=False,
         ),
         label='Database URL',
-        help_text='Connection string to your PostgreSQL database. Never stored in plain text.',
+        help_text='PostgreSQL: postgresql://user:pass@host:5432/db · MySQL: mysql+pymysql://user:pass@host:3306/db. Never stored in plain text.',
     )
 
     class Meta:
         model = Connection
-        fields = ['name', 'description']
+        fields = ['name', 'description', 'provider']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. production, staging'}),
             'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional description'}),
+            'provider': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def save(self, commit=True):
@@ -32,7 +34,7 @@ class ConnectionForm(forms.ModelForm):
 class RuleForm(forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_time']
+        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'schema_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'public'}),
@@ -48,13 +50,44 @@ class RuleForm(forms.ModelForm):
             'timestamp_column': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'updated_at'}),
             'max_age_hours': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
             'min_row_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
-            'schedule_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}, format='%H:%M'),
+            'schedule_type': forms.Select(attrs={'class': 'form-select', 'id': 'id_schedule_type'}),
+            'schedule_cron': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0 8 * * *',
+                'id': 'id_schedule_cron',
+            }),
+            'notify_on_fail': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         self.fields['connection'].required = True
         self.fields['connection'].empty_label = '— Select a connection —'
+        if user is not None:
+            self.fields['connection'].queryset = Connection.objects.filter(user=user)
+        self.fields['schedule_cron'].required = False
+        self.fields['schedule_type'].required = False
+        self.fields['schedule_type'].initial = 'disabled'
+
+    def clean_schedule_type(self):
+        """Default to 'disabled' when nothing is submitted (e.g. omitted from POST)."""
+        value = self.cleaned_data.get('schedule_type') or ''
+        if not value:
+            return 'disabled'
+        return value
+
+    def clean_schedule_cron(self):
+        schedule_type = self.cleaned_data.get('schedule_type', '')
+        schedule_cron = (self.cleaned_data.get('schedule_cron') or '').strip()
+        if schedule_type == 'custom_cron':
+            if not schedule_cron:
+                raise forms.ValidationError('Cron expression is required for custom schedule.')
+            if not croniter.is_valid(schedule_cron):
+                raise forms.ValidationError(
+                    'Invalid cron expression. Use 5-field format, e.g. 0 8 * * *.'
+                )
+        return schedule_cron
 
     def clean(self):
         cleaned = super().clean()

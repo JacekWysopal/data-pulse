@@ -3,7 +3,6 @@ project: DataPulse
 prd_version: 1
 updated: 2026-10-28
 milestone_seq: 1
-milestone_id: m-01-first-deploy
 milestone_status: done
 main_goal: speed
 north_star: S-01
@@ -294,3 +293,120 @@ w GitHub Packages. Zespół BIT instaluje przez `npm install`.
 
 - **M-01** zamknięty 2026-10-25. Wszystkie slices done. Aplikacja live na Render.
   Post-MVP delivery: login/auth, side navbar, per-rule run, schedule, seed demo, dark UI.
+- **M-02** zamknięty 2026-10-27. S-04 schema introspection, S-05 rule builder, S-06 custom SQL, S-07 filters, S-08 connection badge.
+- **M-03** zamknięty 2026-10-28. S-09 repo-map (10x-repo-map skill), S-10 agent CI review. S-11 skipped (solo project).
+
+---
+---
+milestone_seq: 4
+milestone_id: m-04-growth
+milestone_status: open
+main_goal: growth
+north_star: S-12
+top_blocker: multi-tenancy
+---
+
+## Milestone
+
+**M-04 — Growth: Multi-tenancy, Notifications, MySQL, Advanced Scheduler**
+
+Status: open
+źródło: sesja robocza 2026-10-28
+
+Zakres: pełna wielodzieżność (konta, rejestracja, reguły per użytkownik),
+powiadomienia email, MySQL jako provider, zaawansowany scheduler,
+Slack jako „Soon” w UI.
+
+---
+
+## At a glance — M-04
+
+| ID | Slice | Prereqs | Status |
+|---|---|---|---|
+| S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | planning |
+| S-13 | Email notifications — alert na FAIL | S-12 | planning |
+| S-14 | MySQL support — MySQL jako monitored DB provider | — | implemented |
+| S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | implemented |
+| S-16 | Slack notifications — Soon badge w UI + model stub | — | implemented |
+
+---
+
+## Slices — M-04
+
+### S-12 — Multi-tenancy ⭐ (gwiazda M-04)
+
+**Wynik:** Użytkownik może założyć konto przez formularz rejestracji.
+Każdy user widzi wyłącznie swoje Rules i Connections.
+Logowanie jest bezpieczne (HTTPS, CSRF, hasło hashowane).
+
+**Change ID:** multi-tenancy
+
+**Prereqs:** —
+
+**Decyzje architektoniczne (do ustalenia w /10x-research):**
+- Rule.user FK (nullable → required po migracji danych)
+- Connection.user FK
+- Rejestracja: prosty signup bez email verification (MVP) vs. z weryfikacją
+- Migracja istniejących reguł/połączeń — przypisanie do pierwszego superusera
+
+**Status:** planning
+
+**Wynik:** Po uruchomieniu sprawdzenia, jeśli reguła zwraca FAIL lub ERROR,
+właściciel reguły dostaje email z nazwą reguły, statusem i zmierzoną wartością.
+
+**Change ID:** email-notifications
+
+**Prereqs:** S-12 (potrzebny email użytkownika)
+
+**Decyzje architektoniczne (do ustalenia w /10x-research):**
+- Backend email: Django SMTP (Render env vars) vs. SendGrid/Mailgun
+- Per-rule toggle: Rule.notify_on_fail (bool, default False)
+- Cooldown: nie wysyłać jeśli poprzedni email < 1h temu
+- Szablon email: HTML vs. plain text
+
+**Status:** planning
+
+---
+
+### S-14 — MySQL support
+
+**Wynik:** Użytkownik może dodać połączenie MySQL w UI (provider = mysql).
+Reguły volume i freshness działają na MySQL tak samo jak na PostgreSQL.
+
+**Change ID:** mysql-support
+
+**Prereqs:** — (niezależny od multi-tenancy)
+
+**Status:** implemented
+
+---
+
+### S-15 — Advanced scheduler
+
+**Wynik:** Użytkownik wybiera harmonogram reguły spośród opcji:
+1x/dzień, 2x/dzień, 3x/dzień, 6x/dzień, co godzinę, niestandardowy cron.
+Każda opcja ma czytelny opis w UI.
+
+**Change ID:** advanced-scheduler
+
+**Prereqs:** — (niezależny)
+
+**Decyzje architektoniczne (do ustalenia w /10x-research):**
+- Model: rozszerzyć Rule o schedule_type + schedule_cron vs. osobny model Schedule
+- Render Cron Job: jeden job co minutę (run_scheduled) vs. kilka jobów
+- Walidacja cron expression w formularzu
+
+**Status:** planning
+
+---
+
+### S-16 — Slack notifications (Soon)
+
+**Wynik:** W ustawieniach powiadomień widoczna jest opcja Slack z badge „Soon”.
+Model SlackNotification istnieje w bazie (gotowy do aktywacji).
+
+**Change ID:** slack-notifications
+
+**Prereqs:** — (UI only + model stub)
+
+**Status:** implemented

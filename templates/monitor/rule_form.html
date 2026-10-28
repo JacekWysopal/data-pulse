@@ -268,13 +268,53 @@
 
     <!-- ── Schedule ── -->
     <div class="form-section-label">Schedule</div>
-    <div class="mb-4">
-      <label for="{{ form.schedule_time.id_for_label }}" class="form-label">
-        {{ form.schedule_time.label }}<span class="optional-tag">optional</span>
+
+    <!-- Preset quick-fill buttons -->
+    <div class="mb-2" id="preset-buttons" style="display:none">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Quick presets</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8 * * *">08:00 daily</button>
+        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8,20 * * *">08:00 &amp; 20:00</button>
+        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 6,14,22 * * *">6h/14h/22h</button>
+        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 */4 * * *">Every 4h</button>
+        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 * * * *">Hourly</button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label for="{{ form.schedule_type.id_for_label }}" class="form-label">
+        {{ form.schedule_type.label }}<span class="optional-tag">optional</span>
       </label>
-      {{ form.schedule_time }}
-      {% if form.schedule_time.help_text %}<div class="form-text">{{ form.schedule_time.help_text }}</div>{% endif %}
-      {% if form.schedule_time.errors %}<div class="field-error">✗ {{ form.schedule_time.errors|join:", " }}</div>{% endif %}
+      {{ form.schedule_type }}
+      {% if form.schedule_type.errors %}<div class="field-error">✗ {{ form.schedule_type.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div id="custom-cron-row" class="mb-4" style="display:none">
+      <label for="{{ form.schedule_cron.id_for_label }}" class="form-label">
+        {{ form.schedule_cron.label }}
+      </label>
+      {{ form.schedule_cron }}
+      {% if form.schedule_cron.help_text %}<div class="form-text">{{ form.schedule_cron.help_text }}</div>{% endif %}
+      {% if form.schedule_cron.errors %}<div class="field-error">✗ {{ form.schedule_cron.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <!-- ── Notifications ── -->
+    <div class="form-section-label">Notifications</div>
+    <div class="mb-4">
+      <div class="form-check">
+        {{ form.notify_on_fail }}
+        <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
+          Notify me on failure
+        </label>
+      </div>
+      <div class="form-text" style="margin-top:4px">
+        Send an email when this rule returns FAIL or ERROR.
+        Requires your account to have an email address set.
+        Cooldown: at most one email per hour per rule.
+      </div>
+      {% if form.notify_on_fail.errors %}
+        <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
+      {% endif %}
     </div>
 
     <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
@@ -508,6 +548,34 @@
       setTimeout(() => loadColumns(initialConn, initialSchema, initialTable), 600);
     }
   }
+}());
+// Schedule type toggle
+(function() {
+  const typeSelect   = document.getElementById('id_schedule_type');
+  const cronRow      = document.getElementById('custom-cron-row');
+  const presetBtns   = document.getElementById('preset-buttons');
+  const cronInput    = document.getElementById('id_schedule_cron');
+
+  if (!typeSelect) return;
+
+  function updateScheduleUI() {
+    const val = typeSelect.value;
+    const isCustom = val === 'custom_cron';
+    cronRow.style.display    = isCustom ? 'block' : 'none';
+    presetBtns.style.display = isCustom ? 'block' : 'none';
+  }
+
+  typeSelect.addEventListener('change', updateScheduleUI);
+
+  // Preset quick-fill
+  document.querySelectorAll('#preset-buttons [data-cron]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (cronInput) cronInput.value = btn.getAttribute('data-cron');
+    });
+  });
+
+  // Init on page load (handles edit-mode re-render)
+  updateScheduleUI();
 }());
 </script>
 {% endblock %}
