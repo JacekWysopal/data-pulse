@@ -23,4 +23,8 @@ urlpatterns = [
     path('connections/new/', views.connection_create, name='connection_create'),
     path('connections/<int:conn_id>/edit/', views.connection_edit, name='connection_edit'),
     path('connections/<int:conn_id>/delete/', views.connection_delete, name='connection_delete'),
+
+    # Schedule
+    path('schedule/', views.schedule_dashboard, name='schedule_dashboard'),
+    path('schedule/<int:rule_id>/toggle/', views.toggle_schedule, name='toggle_schedule'),
 ]

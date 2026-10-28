@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block breadcrumb %}<span class="dp-breadcrumb-sep">›</span><span class="dp-breadcrumb-current">Schedule</span>{% endblock %}
+
+{% block extra_head %}
+<style>
+  .next-run-soon {
+    color: var(--accent-hover);
+    font-weight: 600;
+  }
+
+  .sched-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-dim);
+    color: var(--accent-hover);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    letter-spacing: 0.03em;
+    margin-left: 0.6rem;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-secondary);
+  }
+
+  .empty-state-icon {
+    margin-bottom: 1.25rem;
+    opacity: 0.35;
+  }
+
+  .empty-state-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.4rem;
+  }
+
+  .empty-state-sub {
+    font-size: 0.83rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fadeup">
+
+  <!-- Page header -->
+  <div class="page-title-row">
+    <h1 class="page-title">
+      Schedule
+      {% if rule_rows %}
+        <span class="sched-count-badge">{{ rule_rows|length }} rule{{ rule_rows|length|pluralize }}</span>
+      {% endif %}
+    </h1>
+  </div>
+
+  <!-- Main panel -->
+  <div class="dp-panel animate-fadeup-1">
+    <div class="dp-panel-header">
+      <span class="dp-panel-title">Scheduled rules</span>
+    </div>
+
+    {% if rule_rows %}
+    <div style="overflow-x: auto">
+      <table class="dp-table">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Table</th>
+            <th>Schedule</th>
+            <th>Next run (UTC)</th>
+            <th>Last run (UTC)</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rule_rows %}
+          {% with rule=row.rule last=row.last_result %}
+          <tr>
+
+            <!-- Rule name -->
+            <td>
+              <a href="{% url 'monitor:rule_history' rule.pk %}" style="font-weight:600">
+                {{ rule.name }}
+              </a>
+            </td>
+
+            <!-- Table -->
+            <td>
+              {% if rule.schema_name or rule.table_name %}
+                <span class="mono" style="font-size:0.78rem">{{ rule.schema_name }}.{{ rule.table_name }}</span>
+              {% else %}
+                <span style="color:var(--text-muted)">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Schedule label -->
+            <td style="color:var(--text-secondary)">
+              {{ rule.get_schedule_type_display }}
+              {% if rule.schedule_type == 'custom_cron' and rule.schedule_cron %}
+                <span class="mono" style="font-size:0.72rem;margin-left:4px">{{ rule.schedule_cron }}</span>
+              {% endif %}
+            </td>
+
+            <!-- Next run -->
+            <td>
+              {% if row.next_run %}
+                {% with minutes_until=row.next_run|timeuntil %}
+                  {# highlight if within the next hour — compare by checking if next_run is within 3600 seconds #}
+                  {% if row.next_run <= now %}
+                    <span class="next-run-soon">{{ row.next_run|date:"Y-m-d H:i" }}</span>
+                  {% else %}
+                    {% comment %}simple heuristic: timesince of now to next_run < 1h{% endcomment %}
+                    <span class="{% if row.next_run|timeuntil == row.next_run|timeuntil and row.next_run|date:'H' == now|date:'H' %}next-run-soon{% endif %}">
+                      {{ row.next_run|date:"Y-m-d H:i" }}
+                    </span>
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                <span style="color:var(--text-muted)">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Last run -->
+            <td>
+              {% if last %}
+                {{ last.checked_at|date:"Y-m-d H:i" }}
+              {% else %}
+                <span style="color:var(--text-muted)">Never</span>
+              {% endif %}
+            </td>
+
+            <!-- Status badge -->
+            <td>
+              {% if last %}
+                {% if last.status == 'OK' %}
+                  <span class="dp-badge dp-badge-ok"><span class="dp-badge-dot"></span>OK</span>
+                {% elif last.status == 'FAIL' %}
+                  <span class="dp-badge dp-badge-fail"><span class="dp-badge-dot"></span>FAIL</span>
+                {% else %}
+                  <span class="dp-badge dp-badge-error"><span class="dp-badge-dot"></span>ERROR</span>
+                {% endif %}
+              {% else %}
+                <span class="dp-badge dp-badge-never"><span class="dp-badge-dot"></span>Never run</span>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td>
+              <div style="display:flex;gap:6px;align-items:center">
+
+                <!-- Quick run -->
+                <form method="post" action="{% url 'monitor:run_single' rule.pk %}" data-run-form style="margin:0">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-dp btn-dp-ghost btn-dp-sm" data-run-btn
+                          title="Run now">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M2.5 2L9.5 6L2.5 10V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    </svg>
+                    Run
+                  </button>
+                </form>
+
+                <!-- Enable / Disable toggle -->
+                <form method="post" action="{% url 'monitor:toggle_schedule' rule.pk %}" style="margin:0">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-dp btn-dp-ghost btn-dp-sm" title="Disable schedule">
+                    Disable
+                  </button>
+                </form>
+
+              </div>
+            </td>
+
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+    <!-- Empty state -->
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="19" stroke="currentColor" stroke-width="2"/>
+          <path d="M24 14v10.5l7 4" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="empty-state-title">No scheduled rules</p>
+      <p class="empty-state-sub">
+        Edit a rule and choose a schedule type to start seeing it here.
+      </p>
+      <a href="{% url 'monitor:rule_create' %}" class="btn-dp btn-dp-primary">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        Add a rule
+      </a>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

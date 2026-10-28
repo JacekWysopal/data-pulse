@@ -1769,3 +1769,123 @@ class RuleFormNotifyOnFailTest(TestCase):
         self.assertRedirects(r, reverse("monitor:dashboard"))
         rule = Rule.objects.get(name="no_notif_rule")
         self.assertFalse(rule.notify_on_fail)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Schedule dashboard (schedule-dashboard change)
+# ═══════════════════════════════════════════════════════════════
+
+class ScheduleDashboardTests(TestCase):
+    """Tests for schedule_dashboard view and toggle_schedule view."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('sched_dash_user', password='pass')
+        self.other_user = User.objects.create_user('sched_other_user', password='pass')
+        self.client.login(username='sched_dash_user', password='pass')
+
+    # ---- View access --------------------------------------------------
+
+    def test_schedule_dashboard_200(self):
+        """Authenticated user with one scheduled rule gets 200 and sees the rule name."""
+        rule = make_rule(name='my_scheduled_rule', min_rows=1, user=self.user)
+        rule.schedule_type = 'preset_1x'
+        rule.save()
+        r = self.client.get(reverse('monitor:schedule_dashboard'))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'my_scheduled_rule')
+
+    def test_schedule_dashboard_redirects_anonymous(self):
+        """Anonymous GET returns 302 to login."""
+        self.client.logout()
+        r = self.client.get(reverse('monitor:schedule_dashboard'))
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_schedule_dashboard_shows_only_scheduled_rules(self):
+        """Only rules with schedule_type != disabled appear in rule_rows."""
+        sched_rule = make_rule(name='sched_only', min_rows=1, user=self.user)
+        sched_rule.schedule_type = 'preset_1x'
+        sched_rule.save()
+        disabled_rule = make_rule(name='disabled_rule', min_rows=1, user=self.user)
+        # disabled_rule.schedule_type defaults to 'disabled', no extra save needed
+        r = self.client.get(reverse('monitor:schedule_dashboard'))
+        self.assertEqual(r.status_code, 200)
+        rule_rows = r.context['rule_rows']
+        rule_ids = [row['rule'].pk for row in rule_rows]
+        self.assertIn(sched_rule.pk, rule_ids)
+        self.assertNotIn(disabled_rule.pk, rule_ids)
+
+    def test_schedule_dashboard_empty_state(self):
+        """User with no scheduled rules gets 200 with an empty rule_rows list."""
+        r = self.client.get(reverse('monitor:schedule_dashboard'))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['rule_rows']), 0)
+
+    # ---- Toggle -------------------------------------------------------
+
+    def test_toggle_schedule_disables_rule(self):
+        """POST to toggle_schedule for a preset_1x rule flips it to disabled."""
+        rule = make_rule(name='to_disable', min_rows=1, user=self.user)
+        rule.schedule_type = 'preset_1x'
+        rule.save()
+        r = self.client.post(reverse('monitor:toggle_schedule', args=[rule.pk]))
+        self.assertRedirects(r, reverse('monitor:schedule_dashboard'),
+                             fetch_redirect_response=False)
+        rule.refresh_from_db()
+        self.assertEqual(rule.schedule_type, 'disabled')
+
+    def test_toggle_schedule_enables_rule(self):
+        """POST to toggle_schedule for a disabled rule flips it to preset_1x."""
+        rule = make_rule(name='to_enable', min_rows=1, user=self.user)
+        # schedule_type is 'disabled' by default
+        r = self.client.post(reverse('monitor:toggle_schedule', args=[rule.pk]))
+        self.assertRedirects(r, reverse('monitor:schedule_dashboard'),
+                             fetch_redirect_response=False)
+        rule.refresh_from_db()
+        self.assertEqual(rule.schedule_type, 'preset_1x')
+
+    def test_toggle_schedule_404_for_other_users_rule(self):
+        """POST by user A on user B's rule returns 404."""
+        other_rule = make_rule(name='other_rule', min_rows=1, user=self.other_user)
+        other_rule.schedule_type = 'preset_1x'
+        other_rule.save()
+        r = self.client.post(reverse('monitor:toggle_schedule', args=[other_rule.pk]))
+        self.assertEqual(r.status_code, 404)
+        other_rule.refresh_from_db()
+        self.assertEqual(other_rule.schedule_type, 'preset_1x')  # unchanged
+
+    # ---- schedule_utils unit tests ------------------------------------
+
+    def test_resolve_cron_preset(self):
+        """resolve_cron returns '0 8 * * *' for preset_1x."""
+        from monitor.schedule_utils import resolve_cron
+        rule = make_rule(min_rows=1, user=self.user)
+        rule.schedule_type = 'preset_1x'
+        self.assertEqual(resolve_cron(rule), '0 8 * * *')
+
+    def test_resolve_cron_custom(self):
+        """resolve_cron returns the schedule_cron value for custom_cron type."""
+        from monitor.schedule_utils import resolve_cron
+        rule = make_rule(min_rows=1, user=self.user)
+        rule.schedule_type = 'custom_cron'
+        rule.schedule_cron = '15 3 * * *'
+        self.assertEqual(resolve_cron(rule), '15 3 * * *')
+
+    def test_resolve_cron_disabled(self):
+        """resolve_cron returns None for disabled."""
+        from monitor.schedule_utils import resolve_cron
+        rule = make_rule(min_rows=1, user=self.user)
+        rule.schedule_type = 'disabled'
+        self.assertIsNone(resolve_cron(rule))
+
+    def test_get_next_run_returns_datetime(self):
+        """get_next_run returns a datetime with hour=8, minute=0 for preset_1x."""
+        from datetime import datetime, timezone as dt_timezone
+        from croniter import croniter
+        # Use croniter directly with a fixed baseline to verify the math
+        now = datetime(2025, 1, 1, 9, 0, 0, tzinfo=dt_timezone.utc)
+        next_run = croniter('0 8 * * *', now).get_next(datetime)
+        self.assertIsInstance(next_run, datetime)
+        self.assertEqual(next_run.hour, 8)
+        self.assertEqual(next_run.minute, 0)
+

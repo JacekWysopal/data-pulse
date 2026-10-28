@@ -7,16 +7,8 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from monitor.models import Rule
+from monitor.schedule_utils import PREDEFINED
 from monitor.services import run_single_rule
-
-# Cron strings for predefined schedule types (UTC).
-PREDEFINED = {
-    'preset_1x':   '0 8 * * *',
-    'preset_2x':   '0 8,20 * * *',
-    'preset_3x':   '0 6,14,22 * * *',
-    'preset_6x':   '0 */4 * * *',
-    'hourly':      '0 * * * *',
-}
 
 
 class Command(BaseCommand):
