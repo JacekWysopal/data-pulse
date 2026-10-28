@@ -1,7 +1,9 @@
 """
 Email notification service for DataPulse rule failures.
 
-Public API: send_fail_notification(rule, result) -> bool
+Public API:
+  send_fail_notification(rule, result) -> bool
+  send_digest_notification(run, failing_results, user) -> bool
 """
 import logging
 from datetime import timedelta
@@ -12,10 +14,12 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .models import Rule
+from .slack_service import send_slack_notification
 
 logger = logging.getLogger(__name__)
 
 COOLDOWN_HOURS = 1
+DIGEST_SUMMARY_THRESHOLD = 10
 
 
 def send_fail_notification(rule: Rule, result) -> bool:
@@ -72,3 +76,73 @@ def send_fail_notification(rule: Rule, result) -> bool:
             exc_info=True,
         )
         return False
+
+
+def send_digest_notification(run, failing_results: list, user) -> bool:
+    """
+    Send one digest email for a completed run.
+
+    Skips when:
+      - failing_results is empty
+      - user has no email address
+    No cooldown — one per run is the contract.
+    Returns True if sent, False if skipped or failed.
+    """
+    if not failing_results:
+        return False
+
+    if not getattr(user, 'email', ''):
+        return False
+
+    fail_count = sum(1 for r in failing_results if r.status == 'FAIL')
+    error_count = sum(1 for r in failing_results if r.status == 'ERROR')
+    total = len(failing_results)
+    is_summary = total >= DIGEST_SUMMARY_THRESHOLD
+
+    subject = f'[DataPulse] {total} rule(s) FAILED in run #{run.pk}'
+
+    context = {
+        'run': run,
+        'failing_results': failing_results,
+        'fail_count': fail_count,
+        'error_count': error_count,
+        'is_summary': is_summary,
+    }
+
+    try:
+        text_body = render_to_string('monitor/email/digest_notification.txt', context)
+        html_body = render_to_string('monitor/email/digest_notification.html', context)
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.attach_alternative(html_body, 'text/html')
+        msg.send()
+        return True
+
+    except Exception:
+        logger.error(
+            'Failed to send digest notification for run %s to user %s (pk=%s)',
+            run.pk,
+            getattr(user, 'username', '?'),
+            getattr(user, 'pk', '?'),
+            exc_info=True,
+        )
+        return False
+
+
+def notify_rule_result(rule: Rule, result) -> dict:
+    """
+    Coordinate all outbound notifications for a rule result.
+
+    Calls both email and Slack senders and returns a dict with channel outcomes.
+    Never raises; both callees handle their own exceptions.
+
+    Returns {'email': bool, 'slack': bool}.
+    """
+    email_sent = send_fail_notification(rule, result)
+    slack_sent = send_slack_notification(rule, result)
+    return {'email': email_sent, 'slack': slack_sent}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block extra_head %}
+<style>
+  .form-card {
+    max-width: 560px;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+  }
+  .form-section-label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+    margin-bottom: 1rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .field-error { color: var(--fail); font-size: 0.75rem; margin-top: 0.3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 animate-fadeup">
+  <a href="{% url 'monitor:slack_webhook_list' %}" class="back-link">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Slack Webhooks
+  </a>
+  <h1 style="font-size:1.4rem;margin-top:0.5rem;margin-bottom:0">{{ action }}</h1>
+</div>
+
+<div class="form-card animate-fadeup animate-fadeup-1">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="dp-alert dp-alert-danger mb-3">✗ {{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="form-section-label">Webhook details</div>
+
+    <div class="mb-3">
+      <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="mb-4">
+      <label for="{{ form.url.id_for_label }}" class="form-label">Webhook URL</label>
+      {{ form.url }}
+      <div class="form-text">Paste the Incoming Webhook URL from your Slack app configuration.</div>
+      {% if form.url.errors %}<div class="field-error">✗ {{ form.url.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="mb-4">
+      <div class="form-check">
+        {{ form.enabled }}
+        <label class="form-check-label" for="{{ form.enabled.id_for_label }}">
+          {{ form.enabled.label }}
+        </label>
+      </div>
+      {% if form.enabled.errors %}<div class="field-error">✗ {{ form.enabled.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
+      <button type="submit" class="btn-dp btn-dp-primary">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Save webhook
+      </button>
+      <a href="{% url 'monitor:slack_webhook_list' %}" class="btn-dp btn-dp-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

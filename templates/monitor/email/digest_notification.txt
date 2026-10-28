@@ -1,0 +1,20 @@
+DataPulse — Run #{{ run.pk }} Digest
+=====================================
+
+{% if is_summary %}{{ fail_count }} rule(s) FAILED, {{ error_count }} ERROR — see dashboard.{% else %}Run started: {{ run.started_at }}
+Total failures: {{ fail_count }} FAIL, {{ error_count }} ERROR
+
+{% for result in failing_results %}Rule:     {{ result.rule.name }}
+Status:   {{ result.status }}
+{% if result.rule.schema_name and result.rule.table_name %}Table:    {{ result.rule.schema_name }}.{{ result.rule.table_name }}{% else %}Type:     Custom SQL{% endif %}
+{% if result.row_count is not None %}Rows:     {{ result.row_count }}{% endif %}
+{% if result.last_record_age_hours is not None %}Age:      {{ result.last_record_age_hours|floatformat:1 }} hours{% endif %}
+{% if result.error_message %}Error:    {{ result.error_message }}{% endif %}
+---
+{% endfor %}{% endif %}
+
+To view details, log in to DataPulse.
+
+--
+This digest was sent by DataPulse because you have Digest mode enabled.
+One email is sent per run when at least one rule with "Notify on failure" fails.

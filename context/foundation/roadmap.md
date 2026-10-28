@@ -411,3 +411,47 @@ Model SlackNotification istnieje w bazie (gotowy do aktywacji).
 **Prereqs:** — (UI only + model stub)
 
 **Status:** implemented
+
+---
+---
+milestone_seq: 5
+milestone_id: m-05-power-features
+milestone_status: open
+main_goal: value
+north_star: S-18
+top_blocker: slack-webhook
+---
+
+## Milestone
+
+**M-05 — Power Features: Notifications, Templates, API, Observability**
+
+Status: open
+Źródło: research session 2026-10-28 — deep competitive analysis
+
+Zakres: 7 funkcji które wyróżniają DataPulse na rynku:
+Slack webhooks, check templates, REST API, alert digest, sparklines, row sampling, dbt integration.
+
+---
+
+## At a glance — M-05
+
+| ID | Slice | Prereqs | Status |
+|---|---|---|---|
+| S-18 | Slack/Teams webhook notifications ⭐ | — | new |
+| S-19 | Check templates — null, uniqueness, referential integrity | — | new |
+| S-20 | REST API + API keys | — | planning |
+| S-21 | Alert digest — group notifications per run | S-18 | new |
+| S-22 | Trend sparklines — history charts in rule list | — | new |
+| S-23 | Row sampling on failure — show example failing rows | — | new |
+| S-24 | dbt webhook integration | S-20 | new |
+
+---
+
+## Deferred (future milestones)
+
+- Schema drift detection (M-06)
+- Team/workspace model (M-06)
+- ML anomaly detection (M-07)
+- Data contracts (M-07)
+- Cross-table consistency (M-06)

@@ -5,6 +5,8 @@ Connection string comes exclusively from rule.connection (UI-managed).
 Rules without a Connection assigned will return ERROR status.
 """
 
+import datetime
+import decimal
 import re
 from urllib.parse import urlparse
 
@@ -13,10 +15,18 @@ import pymysql
 import pymysql.err
 from django.utils import timezone
 
-from .email_service import send_fail_notification
+from .email_service import notify_rule_result, send_digest_notification
 from .models import CheckRun, Connection, Rule, RuleResult
 
 SCHEMA_CACHE_TTL = 300  # 5 minutes
+
+
+def _get_notification_mode(user) -> str:
+    """Return 'immediate' or 'digest'; defaults to immediate on missing profile."""
+    try:
+        return user.profile.notification_mode
+    except Exception:
+        return 'immediate'
 
 
 class MonitoredDbError(Exception):
@@ -174,6 +184,41 @@ def _check_rule(conn, rule: Rule, provider: str = 'postgresql') -> dict:
     return _check_volume_freshness(conn, rule, provider)
 
 
+def _serialize_row(description, row: tuple) -> dict:
+    """Convert a DBAPI2 (description, row) pair to a JSON-serializable dict.
+
+    psycopg2 and pymysql may return datetime, date, and Decimal objects which
+    are not JSON-native. This helper converts them to strings so the result
+    dict can be stored as JSONField content without a custom encoder.
+    """
+    result = {}
+    for col_desc, val in zip(description, row):
+        col_name = col_desc[0]
+        if isinstance(val, datetime.datetime):
+            result[col_name] = val.isoformat()
+        elif isinstance(val, datetime.date):
+            result[col_name] = val.isoformat()
+        elif isinstance(val, decimal.Decimal):
+            result[col_name] = str(val)
+        else:
+            result[col_name] = val
+    return result
+
+
+def _fetch_sample_rows(cur, sql: str, params=None, limit: int = 5) -> list | None:
+    """Execute a sampling query and return up to `limit` serialized row dicts.
+
+    Returns None on any exception so a sampling failure never converts a FAIL
+    result to ERROR. Uses an already-open cursor passed by the caller.
+    """
+    try:
+        cur.execute(sql, params)
+        rows = cur.fetchmany(limit)
+        return [_serialize_row(cur.description, row) for row in rows]
+    except Exception:
+        return None
+
+
 SQL_ALLOWED = re.compile(r'^\s*SELECT\b', re.IGNORECASE)
 SQL_FORBIDDEN = re.compile(
     r'\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|EXECUTE|CALL)\b',
@@ -188,6 +233,7 @@ def _check_custom_sql(conn, rule: Rule, provider: str = 'postgresql') -> dict:
         'last_record_age_hours': None,
         'status': RuleResult.Status.OK,
         'error_message': '',
+        'sample_rows': None,
     }
 
     sql = (rule.custom_sql or '').strip()
@@ -219,6 +265,11 @@ def _check_custom_sql(conn, rule: Rule, provider: str = 'postgresql') -> dict:
 
         if row is None:
             result['status'] = RuleResult.Status.FAIL
+            # Sampling: re-run validated SQL on a new cursor to capture failing rows
+            if provider is not None:
+                with conn.cursor() as sample_cur:
+                    sample_cur.execute(timeout_sql)
+                    result['sample_rows'] = _fetch_sample_rows(sample_cur, sql)
             return result
 
         val = row[0]
@@ -230,6 +281,11 @@ def _check_custom_sql(conn, rule: Rule, provider: str = 'postgresql') -> dict:
 
         if val_norm in falsy:
             result['status'] = RuleResult.Status.FAIL
+            # Sampling: re-run validated SQL on a new cursor to capture failing rows
+            if provider is not None:
+                with conn.cursor() as sample_cur:
+                    sample_cur.execute(timeout_sql)
+                    result['sample_rows'] = _fetch_sample_rows(sample_cur, sql)
 
     except (psycopg2.Error, pymysql.err.Error) as e:
         result['status'] = RuleResult.Status.ERROR
@@ -244,6 +300,7 @@ def _check_volume_freshness(conn, rule: Rule, provider: str = 'postgresql') -> d
         'last_record_age_hours': None,
         'status': RuleResult.Status.OK,
         'error_message': '',
+        'sample_rows': None,
     }
 
     # MySQL default sql_mode does NOT include ANSI_QUOTES, so double-quote
@@ -282,6 +339,23 @@ def _check_volume_freshness(conn, rule: Rule, provider: str = 'postgresql') -> d
     except (psycopg2.Error, pymysql.err.Error) as e:
         result['status'] = RuleResult.Status.ERROR
         result['error_message'] = str(e)
+        return result
+
+    # Sampling: only on FAIL and only when provider is known (guard: provider is not None)
+    if result['status'] == RuleResult.Status.FAIL and provider is not None:
+        table = f'{q}{rule.schema_name}{q}.{q}{rule.table_name}{q}'
+        try:
+            with conn.cursor() as sample_cur:
+                if rule.timestamp_column and rule.max_age_hours is not None:
+                    # Freshness FAIL: 5 most recent rows ordered by ts_col DESC
+                    col = f'{q}{rule.timestamp_column}{q}'
+                    sample_sql = f'SELECT * FROM {table} ORDER BY {col} DESC LIMIT 5'  # noqa: S608
+                else:
+                    # Volume FAIL: up to 5 arbitrary rows
+                    sample_sql = f'SELECT * FROM {table} LIMIT 5'  # noqa: S608
+                result['sample_rows'] = _fetch_sample_rows(sample_cur, sample_sql)
+        except Exception:
+            pass  # sampling failure must not propagate
 
     return result
 
@@ -297,7 +371,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                 error_message='No connection assigned. Add a Connection in the Connections page and assign it to this rule.',
             )
             if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                send_fail_notification(rule, result)
+                notify_rule_result(rule, result)
         else:
             url = rule.connection.get_database_url()
             provider = rule.connection.provider
@@ -308,7 +382,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                     error_message='Connection URL is empty. Edit the connection and provide a valid database URL.',
                 )
                 if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, result)
+                    notify_rule_result(rule, result)
             else:
                 try:
                     conn = _open_conn(url, provider)
@@ -320,9 +394,10 @@ def run_single_rule(rule: Rule) -> RuleResult:
                         row_count=data['row_count'],
                         last_record_age_hours=data['last_record_age_hours'],
                         error_message=data['error_message'],
+                        sample_rows=data.get('sample_rows'),
                     )
                     if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                        send_fail_notification(rule, result)
+                        notify_rule_result(rule, result)
                 except MonitoredDbError as e:
                     result = RuleResult.objects.create(
                         run=run, rule=rule,
@@ -330,7 +405,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                         error_message=str(e),
                     )
                     if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                        send_fail_notification(rule, result)
+                        notify_rule_result(rule, result)
     except Exception as e:
         result = RuleResult.objects.create(
             run=run, rule=rule,
@@ -338,7 +413,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
             error_message=str(e),
         )
         if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-            send_fail_notification(rule, result)
+            notify_rule_result(rule, result)
 
     run.finished_at = timezone.now()
     run.save()
@@ -355,27 +430,39 @@ def run_checks_for_user(user) -> CheckRun:
     """
     run = CheckRun.objects.create()
     rules = Rule.objects.filter(user=user).select_related('connection')
+    mode = _get_notification_mode(user)
+    failing_results = []
 
     conn_cache: dict[str, tuple] = {}
 
     for rule in rules:
         try:
             if not rule.connection_id:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message='No connection assigned. Add a Connection and assign it to this rule.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        failing_results.append(db_result)
                 continue
 
             url = rule.connection.get_database_url()
             provider = rule.connection.provider
             if not url:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        failing_results.append(db_result)
                 continue
 
             if url not in conn_cache:
@@ -387,11 +474,16 @@ def run_checks_for_user(user) -> CheckRun:
             conn, conn_error, provider = conn_cache[url]
 
             if conn_error or conn is None:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message=conn_error or 'Connection failed.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        failing_results.append(db_result)
             else:
                 result = _check_rule(conn, rule, provider)
                 db_result = RuleResult.objects.create(
@@ -400,9 +492,13 @@ def run_checks_for_user(user) -> CheckRun:
                     row_count=result['row_count'],
                     last_record_age_hours=result['last_record_age_hours'],
                     error_message=result['error_message'],
+                    sample_rows=result.get('sample_rows'),
                 )
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, db_result)
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        failing_results.append(db_result)
 
         except Exception as e:
             RuleResult.objects.create(
@@ -418,6 +514,9 @@ def run_checks_for_user(user) -> CheckRun:
             except Exception:
                 pass
 
+    if mode == 'digest' and failing_results:
+        send_digest_notification(run, failing_results, user)
+
     run.finished_at = timezone.now()
     run.save()
     return run
@@ -425,14 +524,20 @@ def run_checks_for_user(user) -> CheckRun:
 
 def run_all_checks() -> CheckRun:
     run = CheckRun.objects.create()
-    rules = Rule.objects.select_related('connection').all()
+    # select_related('user') avoids N+1 when reading rule.user.profile
+    rules = Rule.objects.select_related('connection', 'user').all()
 
     # Cache open connections by URL to avoid duplicate connections per run
     # Value: (conn, error_msg, provider)
     conn_cache: dict[str, tuple] = {}
 
+    # Accumulate digest-mode users' failing results: {user_id: (user, [results])}
+    digest_pending: dict[int, tuple] = {}
+
     for rule in rules:
         try:
+            mode = _get_notification_mode(rule.user)
+
             if not rule.connection_id:
                 db_result = RuleResult.objects.create(
                     run=run, rule=rule,
@@ -440,7 +545,13 @@ def run_all_checks() -> CheckRun:
                     error_message='No connection assigned. Add a Connection and assign it to this rule.',
                 )
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, db_result)
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        uid = rule.user_id
+                        if uid not in digest_pending:
+                            digest_pending[uid] = (rule.user, [])
+                        digest_pending[uid][1].append(db_result)
                 continue
 
             url = rule.connection.get_database_url()
@@ -452,7 +563,13 @@ def run_all_checks() -> CheckRun:
                     error_message='Connection URL is empty.',
                 )
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, db_result)
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        uid = rule.user_id
+                        if uid not in digest_pending:
+                            digest_pending[uid] = (rule.user, [])
+                        digest_pending[uid][1].append(db_result)
                 continue
 
             if url not in conn_cache:
@@ -470,7 +587,13 @@ def run_all_checks() -> CheckRun:
                     error_message=conn_error or 'Connection failed.',
                 )
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, db_result)
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        uid = rule.user_id
+                        if uid not in digest_pending:
+                            digest_pending[uid] = (rule.user, [])
+                        digest_pending[uid][1].append(db_result)
             else:
                 result = _check_rule(conn, rule, provider)
                 db_result = RuleResult.objects.create(
@@ -479,9 +602,16 @@ def run_all_checks() -> CheckRun:
                     row_count=result['row_count'],
                     last_record_age_hours=result['last_record_age_hours'],
                     error_message=result['error_message'],
+                    sample_rows=result.get('sample_rows'),
                 )
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                    send_fail_notification(rule, db_result)
+                    if mode == 'immediate':
+                        notify_rule_result(rule, db_result)
+                    elif rule.notify_on_fail:
+                        uid = rule.user_id
+                        if uid not in digest_pending:
+                            digest_pending[uid] = (rule.user, [])
+                        digest_pending[uid][1].append(db_result)
 
         except Exception as e:
             db_result = RuleResult.objects.create(
@@ -490,7 +620,7 @@ def run_all_checks() -> CheckRun:
                 error_message=str(e),
             )
             if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
-                send_fail_notification(rule, db_result)
+                notify_rule_result(rule, db_result)
 
     for conn, conn_error, provider in conn_cache.values():
         if conn:
@@ -498,6 +628,10 @@ def run_all_checks() -> CheckRun:
                 conn.close()
             except Exception:
                 pass
+
+    # Dispatch one digest per digest-mode user
+    for user, failing_results in digest_pending.values():
+        send_digest_notification(run, failing_results, user)
 
     run.finished_at = timezone.now()
     run.save()

@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
 
-from .models import CheckRun, Rule, RuleResult, SlackNotification
+from .models import CheckRun, Rule, RuleResult, SlackNotification, SlackWebhook
 
 
 @admin.register(Rule)
@@ -25,4 +25,10 @@ class RuleResultAdmin(admin.ModelAdmin):
 @admin.register(SlackNotification)
 class SlackNotificationAdmin(admin.ModelAdmin):
     list_display = ['user', 'enabled', 'created_at']
+    list_filter = ['enabled']
+
+
+@admin.register(SlackWebhook)
+class SlackWebhookAdmin(admin.ModelAdmin):
+    list_display = ['name', 'user', 'enabled', 'created_at']
     list_filter = ['enabled']

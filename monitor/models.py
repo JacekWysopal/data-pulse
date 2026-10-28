@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 import base64
 import os
 
@@ -173,6 +175,16 @@ class Rule(models.Model):
         blank=True,
         verbose_name='Last notified at',
     )
+    notify_slack = models.BooleanField(
+        default=False,
+        verbose_name='Notify via Slack',
+        help_text='Send a Slack message to the rule owner when this rule returns FAIL or ERROR.',
+    )
+    last_slack_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Last Slack notified at',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -249,6 +261,7 @@ class RuleResult(models.Model):
     row_count = models.PositiveIntegerField(null=True, blank=True)
     last_record_age_hours = models.FloatField(null=True, blank=True)
     error_message = models.TextField(blank=True)
+    sample_rows = models.JSONField(null=True, blank=True)
 
     class Meta:
         ordering = ['-checked_at']
@@ -273,3 +286,133 @@ class SlackNotification(models.Model):
 
     def __str__(self):
         return f'SlackNotification(user={self.user_id}, enabled={self.enabled})'
+
+
+class SlackWebhook(models.Model):
+    """Named Slack Incoming Webhook endpoint owned by a user."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='slack_webhooks',
+    )
+    name = models.CharField(max_length=100)
+    url = models.CharField(max_length=500, blank=True)
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [('user', 'name')]
+
+    def __str__(self):
+        return self.name
+
+
+class DbtIntegration(models.Model):
+    """Maps a dbt job to a set of DataPulse rules to run after the job succeeds."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='dbt_integrations',
+    )
+    name = models.CharField(max_length=200)
+    connection = models.ForeignKey(
+        'Connection',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='dbt_integrations',
+    )
+    job_id = models.CharField(
+        max_length=200,
+        help_text='dbt Cloud job ID or any string identifier for dbt Core.',
+    )
+    # Fernet-encrypted raw secret — mirrors Connection._database_url pattern
+    _secret_key = models.TextField(db_column='secret_key')
+    # blank=True: no rules required at creation; Django auto-creates the join table
+    rules = models.ManyToManyField(
+        'Rule',
+        blank=True,
+        related_name='dbt_integrations',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [('user', 'job_id')]
+
+    def __str__(self):
+        return f'{self.name} (job: {self.job_id})'
+
+    def set_secret_key(self, raw: str) -> None:
+        """Encrypt and store the raw secret key using Fernet (same pattern as Connection)."""
+        f = _get_fernet()
+        if f:
+            self._secret_key = f.encrypt(raw.encode()).decode()
+        else:
+            self._secret_key = raw
+
+    def get_secret_key(self) -> str:
+        """Decrypt and return the raw secret key."""
+        f = _get_fernet()
+        if f:
+            try:
+                return f.decrypt(self._secret_key.encode()).decode()
+            except Exception:
+                return self._secret_key
+        return self._secret_key
+
+
+class UserProfile(models.Model):
+    """Per-user settings — currently stores notification_mode."""
+
+    class NotificationMode(models.TextChoices):
+        IMMEDIATE = 'immediate', 'Immediate (one email per rule failure)'
+        DIGEST    = 'digest',    'Digest (one email per run)'
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile',
+    )
+    notification_mode = models.CharField(
+        max_length=20,
+        choices=NotificationMode.choices,
+        default=NotificationMode.IMMEDIATE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'UserProfile(user={self.user_id}, mode={self.notification_mode})'
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def _create_user_profile(sender, instance, created, **kwargs):
+    """Auto-create a UserProfile with default immediate mode when a User is saved."""
+    UserProfile.objects.get_or_create(user=instance)
+
+
+class ApiKey(models.Model):
+    """Named API key for a user, stored as SHA-256 hash; raw key never persisted."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='api_keys',
+    )
+    name = models.CharField(max_length=100)
+    key_hash = models.CharField(max_length=64, unique=True)  # SHA-256 hex, 64 chars
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)  # updated on each auth
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = [('user', 'name')]
+
+    def __str__(self):
+        return f'{self.name} ({self.user})'

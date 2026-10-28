@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block breadcrumb %}
+<span class="dp-breadcrumb-sep">/</span>
+<span class="dp-breadcrumb-current">Settings</span>
+{% endblock %}
+
+{% block content %}
+<div class="animate-fadeup" style="max-width:640px">
+
+  <h2 style="font-size:1.25rem;font-weight:700;margin:0 0 0.25rem">Notification Settings</h2>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1.5rem">
+    Choose how DataPulse sends you email alerts when rules fail.
+  </p>
+
+  <form method="post" action="{% url 'monitor:settings' %}">
+    {% csrf_token %}
+
+    <div class="dp-panel" style="margin-bottom:1.5rem">
+      <div class="dp-panel-header">
+        <span class="dp-panel-title">Email notification mode</span>
+      </div>
+      <div style="padding:1.25rem">
+
+        <!-- Immediate -->
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:var(--radius);border:1px solid {% if profile.notification_mode == 'immediate' %}var(--border-focus){% else %}var(--border){% endif %};background:{% if profile.notification_mode == 'immediate' %}var(--accent-dim){% else %}transparent{% endif %};cursor:pointer;margin-bottom:10px;transition:background 0.15s,border-color 0.15s">
+          <input type="radio" name="notification_mode" value="immediate"
+                 {% if profile.notification_mode == 'immediate' %}checked{% endif %}
+                 style="margin-top:3px;accent-color:var(--accent);flex-shrink:0">
+          <div>
+            <div style="font-size:0.88rem;font-weight:600;color:var(--text-primary);margin-bottom:2px">
+              Immediate
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted)">
+              One email per rule failure, with a 1-hour cooldown per rule.
+              Same as the default behaviour.
+            </div>
+          </div>
+        </label>
+
+        <!-- Digest -->
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:var(--radius);border:1px solid {% if profile.notification_mode == 'digest' %}var(--border-focus){% else %}var(--border){% endif %};background:{% if profile.notification_mode == 'digest' %}var(--accent-dim){% else %}transparent{% endif %};cursor:pointer;transition:background 0.15s,border-color 0.15s">
+          <input type="radio" name="notification_mode" value="digest"
+                 {% if profile.notification_mode == 'digest' %}checked{% endif %}
+                 style="margin-top:3px;accent-color:var(--accent);flex-shrink:0">
+          <div>
+            <div style="font-size:0.88rem;font-weight:600;color:var(--text-primary);margin-bottom:2px">
+              Digest
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted)">
+              One email per run with all failures grouped into a single table.
+              No per-rule cooldown — you receive exactly one digest per run.
+            </div>
+          </div>
+        </label>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn-dp btn-dp-primary">Save settings</button>
+  </form>
+
+</div>
+{% endblock %}

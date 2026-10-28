@@ -25,5 +25,6 @@ urlpatterns = [
             template_name='registration/password_reset_complete.html',
         ), name='password_reset_complete'),
     ])),
+    path('api/v1/', include('monitor.api_urls')),
     path('', include('monitor.urls')),
 ]
