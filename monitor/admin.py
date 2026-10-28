@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
 
-from .models import CheckRun, Rule, RuleResult
+from .models import CheckRun, Rule, RuleResult, SlackNotification
 
 
 @admin.register(Rule)
@@ -20,3 +20,9 @@ class RuleResultAdmin(admin.ModelAdmin):
     list_display = ['rule', 'run', 'status', 'row_count', 'last_record_age_hours', 'checked_at']
     list_filter = ['status']
     readonly_fields = ['checked_at']
+
+
+@admin.register(SlackNotification)
+class SlackNotificationAdmin(admin.ModelAdmin):
+    list_display = ['user', 'enabled', 'created_at']
+    list_filter = ['enabled']

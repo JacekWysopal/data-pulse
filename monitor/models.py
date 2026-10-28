@@ -19,10 +19,19 @@ def _get_fernet():
 
 
 class Connection(models.Model):
-    """Named PostgreSQL connection managed by the user via UI."""
+    """Named database connection (PostgreSQL or MySQL) managed by the user via UI."""
+
+    class Provider(models.TextChoices):
+        POSTGRESQL = 'postgresql', 'PostgreSQL'
+        MYSQL      = 'mysql',      'MySQL'
 
     name = models.CharField(max_length=200, unique=True)
     description = models.CharField(max_length=500, blank=True)
+    provider = models.CharField(
+        max_length=20,
+        choices=Provider.choices,
+        default=Provider.POSTGRESQL,
+    )
     _database_url = models.TextField(db_column='database_url')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -31,7 +40,7 @@ class Connection(models.Model):
         ordering = ['name']
 
     def __str__(self):
-        return self.name
+        return f'{self.name} ({self.get_provider_display()})'
 
     def set_database_url(self, url):
         f = _get_fernet()
@@ -120,12 +129,27 @@ class Rule(models.Model):
         verbose_name='Min row count',
     )
 
-    # Schedule — optional HH:MM UTC, run by cron
-    schedule_time = models.TimeField(
-        null=True,
+    class ScheduleType(models.TextChoices):
+        DISABLED    = 'disabled',    'Disabled'
+        PRESET_1X   = 'preset_1x',   'Once daily (08:00 UTC)'
+        PRESET_2X   = 'preset_2x',   'Twice daily (08:00 & 20:00 UTC)'
+        PRESET_3X   = 'preset_3x',   'Three times daily (06:00, 14:00, 22:00 UTC)'
+        PRESET_6X   = 'preset_6x',   'Six times daily (every 4 h)'
+        HOURLY      = 'hourly',      'Hourly'
+        CUSTOM_CRON = 'custom_cron', 'Custom cron expression'
+
+    schedule_type = models.CharField(
+        max_length=20,
+        choices=ScheduleType.choices,
+        default='disabled',
+        verbose_name='Schedule',
+    )
+    schedule_cron = models.CharField(
+        max_length=100,
         blank=True,
-        verbose_name='Schedule time (UTC)',
-        help_text='Daily run time in UTC, e.g. 06:00. Leave empty to run manually only.',
+        default='',
+        verbose_name='Cron expression',
+        help_text='5-field UTC cron, e.g. 0 8 * * *. Only when schedule_type = custom_cron.',
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -138,6 +162,7 @@ class Rule(models.Model):
                 condition=(
                     models.Q(timestamp_column__gt='', max_age_hours__isnull=False)
                     | models.Q(min_row_count__isnull=False)
+                    | models.Q(rule_type='custom_sql', custom_sql__gt='')
                 ),
                 name='rule_has_at_least_one_condition',
             )
@@ -208,3 +233,21 @@ class RuleResult(models.Model):
 
     def __str__(self):
         return f'{self.rule.name}: {self.status} @ {self.checked_at:%Y-%m-%d %H:%M}'
+
+
+class SlackNotification(models.Model):
+    """Stub model for Slack notification settings — webhook destination and feature flag."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='slack_notifications',
+    )
+    webhook_url = models.CharField(max_length=500, blank=True)
+    enabled = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'SlackNotification(user={self.user_id}, enabled={self.enabled})'

@@ -2,6 +2,8 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 asgiref==3.12.1
     # via django
+croniter==6.2.4
+    # via data-pulse (pyproject.toml)
 cryptography==44.0.3
     # via data-pulse (pyproject.toml) — Fernet encryption for Connection.database_url
 dj-database-url==3.1.2
@@ -14,8 +16,13 @@ django-environ==0.14.0
     # via data-pulse (pyproject.toml)
 gunicorn==26.2.0
     # via data-pulse (pyproject.toml)
+pymysql==1.4.6
 psycopg2-binary==2.9.13
     # via data-pulse (pyproject.toml)
+python-dateutil==3.0.0
+    # via croniter
+six==1.17.0
+    # via python-dateutil
 sqlparse==0.6.0
     # via django
 tzdata==2026.4

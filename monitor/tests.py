@@ -14,7 +14,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import CheckRun, Connection, Rule, RuleResult
+from .models import CheckRun, Connection, Rule, RuleResult, SlackNotification
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -86,7 +86,8 @@ class ConnectionModelTest(TestCase):
 
     def test_connection_str(self):
         conn = make_connection(name='production')
-        self.assertEqual(str(conn), 'production')
+        self.assertIn('production', str(conn))
+        self.assertIn('PostgreSQL', str(conn))
 
 
 class RuleModelTest(TestCase):
@@ -585,24 +586,26 @@ class ConnectionFormTest(TestCase):
         form = ConnectionForm({
             'name': 'staging',
             'description': 'Staging DB',
+            'provider': 'postgresql',
             'database_url': 'postgresql://u:p@host/db',
         })
         self.assertTrue(form.is_valid(), form.errors)
 
     def test_missing_name_invalid(self):
         from .forms import ConnectionForm
-        form = ConnectionForm({'database_url': 'postgresql://u:p@h/db'})
+        form = ConnectionForm({'provider': 'postgresql', 'database_url': 'postgresql://u:p@h/db'})
         self.assertFalse(form.is_valid())
 
     def test_missing_url_invalid(self):
         from .forms import ConnectionForm
-        form = ConnectionForm({'name': 'test'})
+        form = ConnectionForm({'name': 'test', 'provider': 'postgresql'})
         self.assertFalse(form.is_valid())
 
     def test_saves_url_via_set_database_url(self):
         from .forms import ConnectionForm
         form = ConnectionForm({
             'name': 'prod',
+            'provider': 'postgresql',
             'database_url': 'postgresql://u:secret@host/db',
         })
         self.assertTrue(form.is_valid())
@@ -803,6 +806,7 @@ class ConnectionCRUDViewTest(TestCase):
         r = self.client.post(reverse('monitor:connection_create'), {
             'name': 'staging',
             'description': 'Staging',
+            'provider': 'postgresql',
             'database_url': 'postgresql://u:p@host/db',
         })
         self.assertRedirects(r, reverse('monitor:connection_list'))
@@ -812,6 +816,7 @@ class ConnectionCRUDViewTest(TestCase):
         conn = make_connection('old_name')
         r = self.client.post(reverse('monitor:connection_edit', args=[conn.pk]), {
             'name': 'new_name',
+            'provider': 'postgresql',
             'database_url': 'postgresql://u:p@host/db2',
         })
         self.assertRedirects(r, reverse('monitor:connection_list'))
@@ -949,18 +954,19 @@ class RunChecksViewTest(TestCase):
         self.assertRedirects(r, reverse('monitor:dashboard'))
 
 
-# ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 #  Schedule command
-# ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 class RunScheduledCommandTest(TestCase):
 
     @patch('monitor.management.commands.run_scheduled.run_single_rule')
-    def test_runs_rules_matching_current_time(self, mock_run):
-        from django.utils import timezone as tz
-        now_time = tz.now().replace(second=0, microsecond=0).time()
+    @patch('monitor.management.commands.run_scheduled.timezone')
+    def test_runs_rules_matching_current_time(self, mock_tz, mock_run):
+        from datetime import datetime, timezone as utc
+        mock_tz.now.return_value = datetime(2025, 1, 1, 8, 0, tzinfo=utc.utc)
         rule = make_rule(name='scheduled', min_rows=1)
-        rule.schedule_time = now_time
+        rule.schedule_type = 'preset_1x'  # cron: 0 8 * * *
         rule.save()
 
         mock_run.return_value = MagicMock(status='OK')
@@ -968,26 +974,405 @@ class RunScheduledCommandTest(TestCase):
         from monitor.management.commands.run_scheduled import Command
         cmd = Command()
         cmd.stdout = MagicMock()
-        cmd.style = MagicMock()
-        cmd.style.SUCCESS = lambda x: x
+        cmd.stderr = MagicMock()
         cmd.handle()
 
         mock_run.assert_called_once_with(rule)
 
     @patch('monitor.management.commands.run_scheduled.run_single_rule')
-    def test_skips_rules_with_different_time(self, mock_run):
-        from datetime import time
+    @patch('monitor.management.commands.run_scheduled.timezone')
+    def test_skips_rules_with_different_time(self, mock_tz, mock_run):
+        from datetime import datetime, timezone as utc
+        mock_tz.now.return_value = datetime(2025, 1, 1, 9, 0, tzinfo=utc.utc)
         rule = make_rule(name='not_now', min_rows=1)
-        rule.schedule_time = time(0, 0)  # midnight — almost certainly not now
+        rule.schedule_type = 'preset_1x'  # cron: 0 8 * * * — does not match 09:00
         rule.save()
 
         from monitor.management.commands.run_scheduled import Command
-        from django.utils import timezone as tz
-        if tz.now().replace(second=0, microsecond=0).time() == time(0, 0):
-            return  # skip if it IS midnight
-
         cmd = Command()
         cmd.stdout = MagicMock()
+        cmd.stderr = MagicMock()
         cmd.handle()
 
         mock_run.assert_not_called()
+
+    @patch('monitor.management.commands.run_scheduled.run_single_rule')
+    @patch('monitor.management.commands.run_scheduled.timezone')
+    def test_disabled_rule_is_skipped(self, mock_tz, mock_run):
+        from datetime import datetime, timezone as utc
+        mock_tz.now.return_value = datetime(2025, 1, 1, 8, 0, tzinfo=utc.utc)
+        rule = make_rule(name='disabled_rule', min_rows=1)
+        rule.schedule_type = 'disabled'
+        rule.save()
+
+        from monitor.management.commands.run_scheduled import Command
+        cmd = Command()
+        cmd.stdout = MagicMock()
+        cmd.stderr = MagicMock()
+        cmd.handle()
+
+        mock_run.assert_not_called()
+
+    @patch('monitor.management.commands.run_scheduled.run_single_rule')
+    @patch('monitor.management.commands.run_scheduled.timezone')
+    def test_custom_cron_rule_fires(self, mock_tz, mock_run):
+        from datetime import datetime, timezone as utc
+        mock_tz.now.return_value = datetime(2025, 1, 1, 14, 30, tzinfo=utc.utc)
+        rule = make_rule(name='custom_rule', min_rows=1)
+        rule.schedule_type = 'custom_cron'
+        rule.schedule_cron = '30 14 * * *'
+        rule.save()
+
+        mock_run.return_value = MagicMock(status='OK')
+
+        from monitor.management.commands.run_scheduled import Command
+        cmd = Command()
+        cmd.stdout = MagicMock()
+        cmd.stderr = MagicMock()
+        cmd.handle()
+
+        mock_run.assert_called_once_with(rule)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  RuleForm schedule validation
+# ═══════════════════════════════════════════════════════════════
+
+class RuleFormScheduleTest(TestCase):
+
+    def _base_data(self, **overrides):
+        """Minimal valid form data for a volume rule."""
+        conn = Connection.objects.create(name='sched-conn')
+        conn.set_database_url('postgresql://user:pass@host/db')
+        conn.save()
+        data = {
+            'name': 'sched-rule',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'connection': conn.pk,
+            'rule_type': 'volume_freshness',
+            'custom_sql': '',
+            'timestamp_column': '',
+            'max_age_hours': '',
+            'min_row_count': '1',
+            'schedule_type': 'disabled',
+            'schedule_cron': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_custom_cron_required_when_type_is_custom(self):
+        from monitor.forms import RuleForm
+        data = self._base_data(schedule_type='custom_cron', schedule_cron='')
+        form = RuleForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('schedule_cron', form.errors)
+
+    def test_invalid_cron_expression_rejected(self):
+        from monitor.forms import RuleForm
+        data = self._base_data(schedule_type='custom_cron', schedule_cron='60 99 * * *')
+        form = RuleForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('schedule_cron', form.errors)
+
+    def test_valid_custom_cron_accepted(self):
+        from monitor.forms import RuleForm
+        data = self._base_data(schedule_type='custom_cron', schedule_cron='0 8 * * *')
+        form = RuleForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_preset_requires_no_cron_field(self):
+        from monitor.forms import RuleForm
+        data = self._base_data(schedule_type='preset_1x', schedule_cron='')
+        form = RuleForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+class SlackNotificationModelTest(TestCase):
+
+    def test_slacknotification_created_with_defaults(self):
+        """SlackNotification is created with enabled=False, empty webhook_url, no user."""
+        instance = SlackNotification.objects.create()
+        self.assertFalse(instance.enabled)
+        self.assertEqual(instance.webhook_url, '')
+        self.assertIsNone(instance.user)
+
+    def test_connection_list_shows_slack_card(self):
+        """The /connections/ page contains the Slack provider card with a Soon badge."""
+        user = User.objects.create_user('slacktest', password='pass')
+        self.client.force_login(user)
+        r = self.client.get(reverse('monitor:connection_list'))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'Slack', r.content)
+        self.assertIn(b'badge-soon', r.content)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL helper
+# ═══════════════════════════════════════════════════════════════════
+
+def make_mysql_connection(name='test_mysql', url='mysql+pymysql://user:pass@host/db'):
+    conn = Connection(name=name, provider='mysql')
+    conn.set_database_url(url)
+    conn.save()
+    return conn
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL — Connection model
+# ═══════════════════════════════════════════════════════════════════
+
+class ConnectionProviderModelTest(TestCase):
+
+    def test_default_provider_is_postgresql(self):
+        conn = make_connection(name='pg_default')
+        self.assertEqual(conn.provider, 'postgresql')
+
+    def test_mysql_provider_saved(self):
+        conn = make_mysql_connection(name='mysql_conn')
+        self.assertEqual(conn.provider, 'mysql')
+
+    def test_provider_choices(self):
+        from .models import Connection
+        choices = dict(Connection.Provider.choices)
+        self.assertIn('postgresql', choices)
+        self.assertIn('mysql', choices)
+
+    def test_str_includes_provider(self):
+        conn = make_connection(name='prod')
+        self.assertIn('PostgreSQL', str(conn))
+        mysql_conn = make_mysql_connection(name='mysql_prod')
+        self.assertIn('MySQL', str(mysql_conn))
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL — _open_conn dispatch
+# ═══════════════════════════════════════════════════════════════════
+
+class OpenConnDispatchTest(TestCase):
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_postgresql_calls_psycopg2(self, mock_pg):
+        from .services import _open_conn
+        mock_pg.return_value = MagicMock()
+        _open_conn('postgresql://u:p@host/db', 'postgresql')
+        mock_pg.assert_called_once_with('postgresql://u:p@host/db')
+
+    @patch('monitor.services.pymysql.connect')
+    def test_mysql_calls_pymysql(self, mock_my):
+        from .services import _open_conn
+        mock_my.return_value = MagicMock()
+        _open_conn('mysql+pymysql://u:p@host:3306/db', 'mysql')
+        mock_my.assert_called_once()
+        kwargs = mock_my.call_args[1]
+        self.assertEqual(kwargs['host'], 'host')
+        self.assertEqual(kwargs['port'], 3306)
+        self.assertEqual(kwargs['user'], 'u')
+        self.assertEqual(kwargs['database'], 'db')
+
+    @patch('monitor.services.psycopg2.connect')
+    def test_postgresql_error_raises_monitored_db_error(self, mock_pg):
+        import psycopg2 as _pg
+        from .services import _open_conn, MonitoredDbError
+        mock_pg.side_effect = _pg.OperationalError('refused')
+        with self.assertRaises(MonitoredDbError):
+            _open_conn('postgresql://u:p@host/db', 'postgresql')
+
+    @patch('monitor.services.pymysql.connect')
+    def test_mysql_error_raises_monitored_db_error(self, mock_my):
+        import pymysql.err
+        from .services import _open_conn, MonitoredDbError
+        mock_my.side_effect = pymysql.err.OperationalError('refused')
+        with self.assertRaises(MonitoredDbError):
+            _open_conn('mysql+pymysql://u:p@host/db', 'mysql')
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL — _check_custom_sql timeout branch
+# ═══════════════════════════════════════════════════════════════════
+
+class CustomSqlMySQLTest(TestCase):
+
+    def _mock_conn(self, fetchone_return=(True,)):
+        conn = MagicMock()
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchone.return_value = fetchone_return
+        conn.cursor.return_value = cursor
+        return conn, cursor
+
+    def test_mysql_uses_session_max_execution_time(self):
+        from .services import _check_custom_sql
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1')
+        conn, cursor = self._mock_conn((1,))
+        _check_custom_sql(conn, rule, 'mysql')
+        first_call = cursor.execute.call_args_list[0]
+        self.assertIn('max_execution_time', first_call[0][0])
+        self.assertNotIn('statement_timeout', first_call[0][0])
+
+    def test_postgresql_uses_statement_timeout(self):
+        from .services import _check_custom_sql
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1')
+        conn, cursor = self._mock_conn((1,))
+        _check_custom_sql(conn, rule, 'postgresql')
+        first_call = cursor.execute.call_args_list[0]
+        self.assertIn('statement_timeout', first_call[0][0])
+        self.assertNotIn('max_execution_time', first_call[0][0])
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL — _check_volume_freshness freshness branch
+# ═══════════════════════════════════════════════════════════════════
+
+class VolumeFreshnessMySQLTest(TestCase):
+
+    def _mock_conn(self, side_effect=None, fetchone_return=None):
+        conn = MagicMock()
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        if side_effect is not None:
+            cursor.fetchone.side_effect = side_effect
+        else:
+            cursor.fetchone.return_value = fetchone_return
+        conn.cursor.return_value = cursor
+        return conn, cursor
+
+    def test_mysql_uses_timestampdiff(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(ts_col='created_at', max_age=24)
+        conn, cursor = self._mock_conn(fetchone_return=(2.0,))
+        _check_volume_freshness(conn, rule, 'mysql')
+        # Find the freshness SQL call
+        calls = [str(c) for c in cursor.execute.call_args_list]
+        freshness_calls = [c for c in calls if 'TIMESTAMPDIFF' in c or 'COUNT' in c]
+        self.assertTrue(any('TIMESTAMPDIFF' in c for c in calls))
+        self.assertFalse(any('EXTRACT' in c for c in calls))
+
+    def test_postgresql_uses_extract_epoch(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(ts_col='created_at', max_age=24)
+        conn, cursor = self._mock_conn(fetchone_return=(2.0,))
+        _check_volume_freshness(conn, rule, 'postgresql')
+        calls = [str(c) for c in cursor.execute.call_args_list]
+        self.assertTrue(any('EXTRACT' in c for c in calls))
+        self.assertFalse(any('TIMESTAMPDIFF' in c for c in calls))
+
+    def test_mysql_freshness_ok(self):
+        from .services import _check_volume_freshness
+        rule = make_rule(ts_col='created_at', max_age=24)
+        conn, cursor = self._mock_conn(fetchone_return=(2.0,))
+        result = _check_volume_freshness(conn, rule, 'mysql')
+        self.assertEqual(result['status'], 'OK')
+        self.assertAlmostEqual(result['last_record_age_hours'], 2.0)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MySQL — get_schema_tables system-schema filter
+# ═══════════════════════════════════════════════════════════════════
+
+class GetSchemaTablesMySQLTest(TestCase):
+
+    def setUp(self):
+        self.mysql_conn = make_mysql_connection(name='mysql_tables_test')
+
+    @patch('monitor.services._open_conn')
+    def test_mysql_excludes_system_schemas(self, mock_open):
+        from .services import get_schema_tables
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchall.return_value = [('mydb', 'orders')]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = cursor
+        mock_open.return_value = mock_conn
+
+        result = get_schema_tables(self.mysql_conn.pk)
+        self.assertIsNone(result['error'])
+        sql_executed = cursor.execute.call_args[0][0]
+        self.assertIn('performance_schema', sql_executed)
+        self.assertNotIn('pg_catalog', sql_executed)
+
+    @patch('monitor.services._open_conn')
+    def test_postgresql_excludes_pg_catalog(self, mock_open):
+        from .services import get_schema_tables
+        pg_conn = make_connection(name='pg_tables_test')
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchall.return_value = [('public', 'orders')]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = cursor
+        mock_open.return_value = mock_conn
+
+        result = get_schema_tables(pg_conn.pk)
+        self.assertIsNone(result['error'])
+        sql_executed = cursor.execute.call_args[0][0]
+        self.assertIn('pg_catalog', sql_executed)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  MySQL — get_schema_columns is_timestamp for datetime type
+# ═══════════════════════════════════════════════════════════════
+
+class GetSchemaColumnsMySQLTest(TestCase):
+
+    def setUp(self):
+        self.mysql_conn = make_mysql_connection(name='mysql_cols_test')
+
+    @patch('monitor.services._open_conn')
+    def test_datetime_column_is_timestamp_true(self, mock_open):
+        from .services import get_schema_columns
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchall.return_value = [
+            ('created_at', 'datetime'),
+            ('id', 'int'),
+        ]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = cursor
+        mock_open.return_value = mock_conn
+
+        result = get_schema_columns(self.mysql_conn.pk, 'mydb', 'orders')
+        self.assertIsNone(result['error'])
+        cols = {c['name']: c for c in result['columns']}
+        self.assertTrue(cols['created_at']['is_timestamp'])
+        self.assertFalse(cols['id']['is_timestamp'])
+
+    @patch('monitor.services._open_conn')
+    def test_timestamp_column_is_timestamp_true(self, mock_open):
+        from .services import get_schema_columns
+        cursor = MagicMock()
+        cursor.__enter__ = MagicMock(return_value=cursor)
+        cursor.__exit__ = MagicMock(return_value=False)
+        cursor.fetchall.return_value = [('updated_at', 'timestamp')]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = cursor
+        mock_open.return_value = mock_conn
+
+        result = get_schema_columns(self.mysql_conn.pk, 'mydb', 'orders')
+        cols = {c['name']: c for c in result['columns']}
+        self.assertTrue(cols['updated_at']['is_timestamp'])
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Phase 5 — ?provider=mysql pre-selection view test
+# ═══════════════════════════════════════════════════════════════
+
+class ConnectionCreateProviderPreSelectTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('admin_preselect', password='pass')
+        self.client.login(username='admin_preselect', password='pass')
+
+    def test_provider_mysql_preselected_from_querystring(self):
+        r = self.client.get(reverse('monitor:connection_create') + '?provider=mysql')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context['form'].initial.get('provider'), 'mysql')
+
+    def test_no_querystring_no_initial_provider(self):
+        r = self.client.get(reverse('monitor:connection_create'))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn('provider', r.context['form'].initial)
+

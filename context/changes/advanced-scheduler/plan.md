@@ -443,10 +443,10 @@ custom selected, invalid cron expression, valid cron expression, preset with no 
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 No pending migrations
-- [ ] 1.3 Django system check passes
-- [ ] 1.4 Existing tests still pass
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 No pending migrations
+- [x] 1.3 Django system check passes
+- [x] 1.4 Existing tests still pass
 
 #### Manual
 
@@ -457,9 +457,9 @@ custom selected, invalid cron expression, valid cron expression, preset with no 
 
 #### Automated
 
-- [ ] 2.1 croniter importable and match works
-- [ ] 2.2 Django system check passes
-- [ ] 2.3 Existing tests still pass
+- [x] 2.1 croniter importable and match works
+- [x] 2.2 Django system check passes
+- [x] 2.3 Existing tests still pass
 
 #### Manual
 
@@ -471,11 +471,11 @@ custom selected, invalid cron expression, valid cron expression, preset with no 
 
 #### Automated
 
-- [ ] 3.1 Migration applies cleanly
-- [ ] 3.2 No pending migrations
-- [ ] 3.3 Django system check passes
-- [ ] 3.4 No schedule_time references in source
-- [ ] 3.5 Tests pass
+- [x] 3.1 Migration applies cleanly
+- [x] 3.2 No pending migrations
+- [x] 3.3 Django system check passes
+- [x] 3.4 No schedule_time references in source
+- [x] 3.5 Tests pass
 
 #### Manual
 
@@ -486,8 +486,8 @@ custom selected, invalid cron expression, valid cron expression, preset with no 
 
 #### Automated
 
-- [ ] 4.1 Django system check passes
-- [ ] 4.2 Tests pass
+- [x] 4.1 Django system check passes
+- [x] 4.2 Tests pass
 
 #### Manual
 
@@ -501,8 +501,8 @@ custom selected, invalid cron expression, valid cron expression, preset with no 
 
 #### Automated
 
-- [ ] 5.1 All monitor tests pass
-- [ ] 5.2 No schedule_time references in tests
+- [x] 5.1 All monitor tests pass
+- [x] 5.2 No schedule_time references in tests
 
 #### Manual
 

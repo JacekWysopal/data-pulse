@@ -1,7 +1,7 @@
 ---
 change_id: slack-notifications
 title: Slack notifications — Soon badge in UI, backend stub ready for activation
-status: plan_reviewed
+status: implemented
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

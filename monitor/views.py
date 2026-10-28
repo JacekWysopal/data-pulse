@@ -162,7 +162,11 @@ def connection_create(request):
             messages.success(request, 'Connection added.')
             return redirect('monitor:connection_list')
     else:
-        form = ConnectionForm()
+        initial = {}
+        provider_param = request.GET.get('provider')
+        if provider_param:
+            initial['provider'] = provider_param
+        form = ConnectionForm(initial=initial)
     return render(request, 'monitor/connection_form.html', {'form': form, 'action': 'Add connection'})
 
 

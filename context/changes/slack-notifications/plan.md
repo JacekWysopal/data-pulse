@@ -266,9 +266,9 @@ Assert `response.status_code == 200`, `b'Slack' in response.content`, and
 
 #### Automated
 
-- [ ] 1.1 Migration generates without errors
-- [ ] 1.2 Migration applies cleanly
-- [ ] 1.3 Django system check passes
+- [x] 1.1 Migration generates without errors
+- [x] 1.2 Migration applies cleanly
+- [x] 1.3 Django system check passes
 
 #### Manual
 
@@ -278,7 +278,7 @@ Assert `response.status_code == 200`, `b'Slack' in response.content`, and
 
 #### Automated
 
-- [ ] 2.1 Django template check passes
+- [x] 2.1 Django template check passes
 
 #### Manual
 
@@ -288,8 +288,8 @@ Assert `response.status_code == 200`, `b'Slack' in response.content`, and
 
 #### Automated
 
-- [ ] 3.1 New model and UI tests pass
-- [ ] 3.2 No regressions in existing test suite
+- [x] 3.1 New model and UI tests pass
+- [x] 3.2 No regressions in existing test suite
 
 #### Manual
 

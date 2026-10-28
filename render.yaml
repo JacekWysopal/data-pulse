@@ -14,3 +14,19 @@ services:
         value: "False"
       - key: PYTHON_VERSION
         value: "3.12.0"
+
+  - type: cron
+    name: data-pulse-scheduler
+    runtime: python
+    schedule: "* * * * *"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python manage.py run_scheduled"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"

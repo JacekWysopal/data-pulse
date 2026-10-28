@@ -688,9 +688,9 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly
-- [ ] 1.2 ConnectionModelTest passes
-- [ ] 1.3 Full test suite passes (no new failures)
+- [x] 1.1 Migration applies cleanly
+- [x] 1.2 ConnectionModelTest passes
+- [x] 1.3 Full test suite passes (no new failures)
 
 #### Manual
 
@@ -702,9 +702,9 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 2.1 pymysql importable after install
-- [ ] 2.2 _open_conn dispatch unit tests pass (psycopg2 vs pymysql)
-- [ ] 2.3 Full test suite passes (no new failures)
+- [x] 2.1 pymysql importable after install
+- [x] 2.2 _open_conn dispatch unit tests pass (psycopg2 vs pymysql)
+- [x] 2.3 Full test suite passes (no new failures)
 
 #### Manual
 
@@ -714,9 +714,9 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 3.1 get_schema_tables MySQL mock test passes
-- [ ] 3.2 get_schema_columns datetime is_timestamp test passes
-- [ ] 3.3 Full test suite passes
+- [x] 3.1 get_schema_tables MySQL mock test passes
+- [x] 3.2 get_schema_columns datetime is_timestamp test passes
+- [x] 3.3 Full test suite passes
 
 #### Manual
 
@@ -727,10 +727,10 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 4.1 _check_custom_sql MySQL timeout branch test passes
-- [ ] 4.2 _check_volume_freshness MySQL freshness branch test passes
-- [ ] 4.3 _check_volume_freshness PostgreSQL freshness branch unchanged
-- [ ] 4.4 Full test suite passes
+- [x] 4.1 _check_custom_sql MySQL timeout branch test passes
+- [x] 4.2 _check_volume_freshness MySQL freshness branch test passes
+- [x] 4.3 _check_volume_freshness PostgreSQL freshness branch unchanged
+- [x] 4.4 Full test suite passes
 
 #### Manual
 
@@ -742,8 +742,8 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 5.1 Full test suite passes
-- [ ] 5.2 ?provider=mysql pre-selection view test passes
+- [x] 5.1 Full test suite passes
+- [x] 5.2 ?provider=mysql pre-selection view test passes
 
 #### Manual
 
@@ -756,9 +756,9 @@ automatically. No data transformation required.
 
 #### Automated
 
-- [ ] 6.1 All new test classes pass (OpenConnDispatchTest, CustomSqlMySQLTest, VolumeFreshnessMySQLTest, GetSchemaTablesMySQLTest, GetSchemaColumnsMySQLTest)
-- [ ] 6.2 No existing tests broken
-- [ ] 6.3 make test / python manage.py test monitor exits 0
+- [x] 6.1 All new test classes pass (OpenConnDispatchTest, CustomSqlMySQLTest, VolumeFreshnessMySQLTest, GetSchemaTablesMySQLTest, GetSchemaColumnsMySQLTest)
+- [x] 6.2 No existing tests broken
+- [x] 6.3 make test / python manage.py test monitor exits 0
 
 #### Manual
 
