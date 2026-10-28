@@ -1,13 +1,9 @@
-# AI Code Review workflow — adapted from m5l3-review.yml.template
-# Changes from template:
-#   - api-key secret: ANTHROPIC_API_KEY (was: LLM_PROVIDER_API_KEY)
-#   - Comment step: renders all 6 criterion scores as a Markdown table (F1 fix)
+# AI Code Review workflow — DISABLED (requires ANTHROPIC_API_KEY secret)
+# To enable: add ANTHROPIC_API_KEY to GitHub Secrets and change 'workflow_dispatch' back to pull_request
 name: AI Code Review
 
 on:
-  pull_request:
-    branches: [master]
-    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 permissions:
   contents: read
