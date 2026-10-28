@@ -295,12 +295,13 @@ w GitHub Packages. Zespół BIT instaluje przez `npm install`.
   Post-MVP delivery: login/auth, side navbar, per-rule run, schedule, seed demo, dark UI.
 - **M-02** zamknięty 2026-10-27. S-04 schema introspection, S-05 rule builder, S-06 custom SQL, S-07 filters, S-08 connection badge.
 - **M-03** zamknięty 2026-10-28. S-09 repo-map (10x-repo-map skill), S-10 agent CI review. S-11 skipped (solo project).
+- **M-04** zamknięty 2026-10-29. S-12 multi-tenancy, S-13 email notifications, S-14 MySQL, S-15 advanced scheduler, S-16 Slack Soon badge.
 
 ---
 ---
 milestone_seq: 4
 milestone_id: m-04-growth
-milestone_status: open
+milestone_status: done
 main_goal: growth
 north_star: S-12
 top_blocker: multi-tenancy
@@ -310,7 +311,7 @@ top_blocker: multi-tenancy
 
 **M-04 — Growth: Multi-tenancy, Notifications, MySQL, Advanced Scheduler**
 
-Status: open
+Status: done
 źródło: sesja robocza 2026-10-28
 
 Zakres: pełna wielodzieżność (konta, rejestracja, reguły per użytkownik),
@@ -323,8 +324,8 @@ Slack jako „Soon” w UI.
 
 | ID | Slice | Prereqs | Status |
 |---|---|---|---|
-| S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | planning |
-| S-13 | Email notifications — alert na FAIL | S-12 | planning |
+| S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | implemented |
+| S-13 | Email notifications — alert na FAIL | S-12 | implemented |
 | S-14 | MySQL support — MySQL jako monitored DB provider | — | implemented |
 | S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | implemented |
 | S-16 | Slack notifications — Soon badge w UI + model stub | — | implemented |
@@ -349,7 +350,7 @@ Logowanie jest bezpieczne (HTTPS, CSRF, hasło hashowane).
 - Rejestracja: prosty signup bez email verification (MVP) vs. z weryfikacją
 - Migracja istniejących reguł/połączeń — przypisanie do pierwszego superusera
 
-**Status:** planning
+**Status:** implemented
 
 **Wynik:** Po uruchomieniu sprawdzenia, jeśli reguła zwraca FAIL lub ERROR,
 właściciel reguły dostaje email z nazwą reguły, statusem i zmierzoną wartością.
@@ -364,7 +365,7 @@ właściciel reguły dostaje email z nazwą reguły, statusem i zmierzoną warto
 - Cooldown: nie wysyłać jeśli poprzedni email < 1h temu
 - Szablon email: HTML vs. plain text
 
-**Status:** planning
+**Status:** implemented
 
 ---
 
@@ -396,7 +397,7 @@ Każda opcja ma czytelny opis w UI.
 - Render Cron Job: jeden job co minutę (run_scheduled) vs. kilka jobów
 - Walidacja cron expression w formularzu
 
-**Status:** planning
+**Status:** implemented
 
 ---
 
