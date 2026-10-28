@@ -16,7 +16,7 @@ django-environ==0.14.0
     # via data-pulse (pyproject.toml)
 gunicorn==26.2.0
     # via data-pulse (pyproject.toml)
-pymysql==1.4.6
+pymysql==1.2.3
 psycopg2-binary==2.9.13
     # via data-pulse (pyproject.toml)
 python-dateutil==3.0.0
