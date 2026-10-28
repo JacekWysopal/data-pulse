@@ -217,6 +217,78 @@ jako badge przy każdej regule. Jeden rzut oka pokazuje z której bazy pochodzi 
 - S-03 — connection management przez UI
 
 ---
+---
+milestone_seq: 3
+milestone_id: m-03-large-scale
+milestone_status: open
+main_goal: quality
+north_star: S-11
+top_blocker: repo-map
+---
+
+## Milestone
+
+**M-03 — Large Scale & Legacy + AI-Native Teamwork**
+
+Status: open
+Źródło: kurs 10xDevs M4 + M5 — nowe rozdziały
+
+Zakres: zastosowanie wzorca Wide Scan → Deep Focus, mapa projektu,
+agent code review w CI/CD, Shared AI Registry dla zespółu BIT.
+
+---
+
+## At a glance — M-03
+
+| ID | Slice | Prereqs | Status |
+|---|---|---|—|
+| S-09 | Repo map — Wide Scan, context/map/repo-map.md (M4L2) | — | done |
+| S-10 | Agent code review w CI — GitHub Actions Composite Action (M5L2) | S-09 | proposed |
+| S-11 | Shared AI Registry — skille DataPulse jako paczka npm (M5L4) ⭐ | S-10 | proposed |
+
+---
+
+## Slices — M-03
+
+### S-09 — Repo map (Wide Scan)
+
+**Wynik:** Dokument `context/map/repo-map.md` z mapą projektu DataPulse:
+aktywne obszary, punkty wejścia, zależności, ryzyka, niezwiadome.
+Gotowy do użycia przez agenta w kolejnych sesjach.
+
+**Change ID:** repo-map
+
+**Metoda:** Wide Scan z M4L2 — 3 artefakty robocze → synteza.
+
+**Status:** in-progress
+
+---
+
+### S-10 — Agent code review w CI
+
+**Wynik:** GitHub Actions workflow uruchamia agenta na każdy PR.
+Agent ocenia diff według kryteriów z M5L2 i zostawia komentarz.
+
+**Change ID:** ci-code-review
+
+**Prereqs:** S-09 (mapa projektu jako kontekst dla agenta)
+
+**Status:** proposed
+
+---
+
+### S-11 — Shared AI Registry ⭐ (gwiazda M-03)
+
+**Wynik:** Skille i reguły DataPulse spakowane jako paczka npm
+w GitHub Packages. Zespół BIT instaluje przez `npm install`.
+
+**Change ID:** shared-ai-registry
+
+**Prereqs:** S-10
+
+**Status:** proposed
+
+---
 
 ## Milestone History
 
