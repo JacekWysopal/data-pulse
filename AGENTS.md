@@ -64,26 +64,28 @@ uv run pip-audit                           # dependency vulnerability scan
 Always run `makemigrations monitor` after changing `monitor/models.py`. Commit the generated migration file alongside the model change.
 <!-- BEGIN @przeprogramowani/10x-cli -->
 
-## Zestaw narzędzi AI 10xDevs - Moduł 4, Lekcja 2 (Mapa Projektu)
+## Zestaw narzędzi AI 10xDevs — Moduł 5, Lekcja 3 (Przegląd kodu w CI)
 
-Szybko zorientuj się w nieznanym lub starszym repozytorium na podstawie dowodów, a nie drzew katalogów: **najpierw szerokie skanowanie, później głęboka analiza.**
+Przenieś agenta przeglądu do GitHub Actions i przekształć jego werdykt w bramkę scalania. Oceń zmiany promptów i modeli na stałym zestawie przypadków przed ich wdrożeniem.
 
 ```
-git history + dependency graph + contributors -> context/map/repo-map.md -> focused /10x-research
+m5l3-requirements -> /10x-new -> /10x-research -> /10x-plan -> review.yml + composite action -> promptfoo evals
 ```
 
-### Router zadań - od czego zacząć
+### Router zadań — Od czego zacząć
 
-| Umiejętność / prompt | Użyj, gdy |
+| Umiejętność / prompt / szablon | Użyj, gdy |
 | --- | --- |
-| `/10x-repo-map` | Mapa Projektu w jednym uruchomieniu. Uszeregowuje możliwości biznesowe według krytyczności × rozgłosu, przechowuje dowody w `context/map/evidence/` i zapisuje `context/map/repo-map.md` ze strefami ryzyka, listą lektur na pierwszy dzień oraz jawnymi niewiadomymi. Użyj `--replace`, aby odświeżyć; poprzednie uruchomienie zostanie przeniesione do `context/archive/`. |
-| `m4l2-1-territory-git-history` -> `m4l2-2-structure-dependency-cruiser` -> `m4l2-3-contributors-git` -> `m4l2-repo-map-synthesis` | Ta sama mapa tworzona krok po kroku, po jednym artefakcie naraz, aby można było zobaczyć, co wnosi każde źródło dowodów. |
-| `/10x-research` | Pytanie dotyczące jednej funkcji lub obszaru. Mapa obejmuje szerokość i nie przyjmuje celu; głębokość należy do badań. |
+| `m5l3-requirements` + `m5l3-cicd` (prompty) | Badasz i planujesz przepływ pracy przeglądu CI na podstawie pisemnych wymagań. |
+| `m5l3-review.yml.template`, `m5l3-action.yml.template` (szablony konfiguracji) | Podłączasz recenzenta do przepływu pracy PR: composite action z danymi wejściowymi tytułu, treści i diffu, etykietami `ai-cr:passed` / `ai-cr:failed` oraz nieudanym sprawdzeniem przy werdykcie `fail`. |
+| `m5l3-promptfoo` (prompt) + `m5l3-promptfooconfig.yaml.template` | Porównujesz modele lub zmiany promptów na tych samych diffach z asercjami is-json, llm-rubric i javascript. |
+| `/10x-impl-review-ci` | Przeglądasz PR względem jego `context/changes/<id>/plan.md` w CI za pomocą action swojego asystenta kodowania AI; jego szablon workflow znajduje się w `references/` umiejętności. |
 
 ### Twarde zasady
 
-- **Niech narzędzia zbierają dowody poza oknem kontekstu.** Używaj git, forge i narzędzi grafowych do zbierania danych, a następnie interpretuj wyłącznie ich skondensowane wyniki. Nigdy nie czytaj repozytorium plik po pliku.
-- **Wyklucz szum.** Pomijaj pliki lock, wygenerowany kod, commity masowego formatowania, commity botów i commity utworzone przez agentów podczas klasyfikowania aktywności.
-- **Niewiadome są częścią mapy.** Oznaczaj jako niewiadome to, czego nie mogą pokazać dowody, zamiast wypełniać lukę domysłem.
+- **Przypinaj action innych firm do pełnego SHA commita** z tagiem w komentarzu.
+- **Bramkuj na polu werdyktu**, nigdy na wyjściu w postaci wolnego tekstu.
+- **Przekazuj wartości wielowierszowe (diffy) przez pliki lub ograniczniki heredoc**, a nie jednowierszowe zapisy `$GITHUB_OUTPUT`.
+- **Uruchom zestaw ewaluacyjny przed zmianą promptu przeglądu lub modelu.**
 
 <!-- END @przeprogramowani/10x-cli -->

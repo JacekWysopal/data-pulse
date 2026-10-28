@@ -1,7 +1,7 @@
 ---
 project: DataPulse
 prd_version: 1
-updated: 2026-10-25
+updated: 2026-10-28
 milestone_seq: 1
 milestone_id: m-01-first-deploy
 milestone_status: done
@@ -243,7 +243,7 @@ agent code review w CI/CD, Shared AI Registry dla zespółu BIT.
 | ID | Slice | Prereqs | Status |
 |---|---|---|—|
 | S-09 | Repo map — Wide Scan, context/map/repo-map.md (M4L2) | — | done |
-| S-10 | Agent code review w CI — GitHub Actions Composite Action (M5L2) | S-09 | proposed |
+| S-10 | Agent code review w CI — GitHub Actions Composite Action (M5L2) | S-09 | done |
 | S-11 | Shared AI Registry — skille DataPulse jako paczka npm (M5L4) ⭐ | S-10 | proposed |
 
 ---
@@ -273,11 +273,11 @@ Agent ocenia diff według kryteriów z M5L2 i zostawia komentarz.
 
 **Prereqs:** S-09 (mapa projektu jako kontekst dla agenta)
 
-**Status:** proposed
+**Status:** done
 
 ---
 
-### S-11 — Shared AI Registry ⭐ (gwiazda M-03)
+### S-11
 
 **Wynik:** Skille i reguły DataPulse spakowane jako paczka npm
 w GitHub Packages. Zespół BIT instaluje przez `npm install`.
