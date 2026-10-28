@@ -220,7 +220,7 @@ jako badge przy każdej regule. Jeden rzut oka pokazuje z której bazy pochodzi 
 ---
 milestone_seq: 3
 milestone_id: m-03-large-scale
-milestone_status: open
+milestone_status: done
 main_goal: quality
 north_star: S-11
 top_blocker: repo-map
@@ -244,7 +244,7 @@ agent code review w CI/CD, Shared AI Registry dla zespółu BIT.
 |---|---|---|—|
 | S-09 | Repo map — Wide Scan, context/map/repo-map.md (M4L2) | — | done |
 | S-10 | Agent code review w CI — GitHub Actions Composite Action (M5L2) | S-09 | done |
-| S-11 | Shared AI Registry — skille DataPulse jako paczka npm (M5L4) ⭐ | S-10 | proposed |
+| S-11 | Shared AI Registry — skille DataPulse jako paczka npm (M5L4) ⭐ | S-10 | skipped |
 
 ---
 
