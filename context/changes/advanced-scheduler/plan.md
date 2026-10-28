@@ -178,7 +178,7 @@ schedule types.
 - `now = timezone.now().replace(second=0, microsecond=0)` — keep timezone-aware.
 - Query: `Rule.objects.exclude(schedule_type='disabled').select_related('connection')`.
 - For each rule: `cron_str = PREDEFINED.get(rule.schedule_type) or rule.schedule_cron`;
-  skip if `not cron_str`; call `croniter.match(cron_str, now)` to decide fire.
+  if `not cron_str`: emit `self.stderr.write(f'Rule {rule.id} has schedule_type=custom_cron but schedule_cron is blank — skipping')` and continue; call `croniter.match(cron_str, now)` to decide fire.
 - Import: `from croniter import croniter`.
 
 #### 4. Add Render Cron Job to render.yaml
@@ -261,7 +261,7 @@ Phase 4.
 - Migration applies cleanly: `python manage.py migrate`
 - No pending migrations: `python manage.py migrate --check`
 - Django system check passes: `python manage.py check`
-- No reference to `schedule_time` in source code: `grep -r "schedule_time" monitor/ --include="*.py"` returns empty (migrations excluded with `--exclude-dir=migrations`).
+- No reference to `schedule_time` in source code: `grep -r "schedule_time" monitor/ --include="*.py" --exclude-dir=migrations` returns empty.
 - Tests pass: `python manage.py test monitor`
 
 #### Manual Verification:
@@ -305,7 +305,7 @@ the cron expression with `croniter.is_valid()` when `schedule_type='custom_cron'
 
 #### 2. Update rule form template to show/hide cron input
 
-**File**: `monitor/templates/monitor/rule_form.html`
+**File**: `templates/monitor/rule_form.html`
 
 **Intent**: Render the `schedule_type` dropdown and a `schedule_cron` text field that is
 hidden until the user selects "Custom cron expression". Use inline JS (no new framework)

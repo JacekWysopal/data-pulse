@@ -9,13 +9,17 @@ opt-in toggle and protected by a 1-hour cooldown to prevent alert spam.
 This plan assumes **S-12 (multi-tenancy) is already merged**, so `Rule` has an
 `owner` ForeignKey to `django.contrib.auth.User`.
 
+> ⛔ **Prerequisite gate**: Phase 1 CANNOT start until multi-tenancy (S-12) is merged
+> and `Rule.owner` FK exists in production. Verify `multi-tenancy/change.md` shows
+> `status: implemented` before beginning any phase of this change.
+
 ## Current State Analysis
 
 - `monitor/models.py` — `Rule` model has no notification fields. `RuleResult.Status`
   has `OK`, `FAIL`, `ERROR` (models.py:142–148). `Rule` will gain `owner` FK from S-12.
 - `monitor/services.py` — Two result-creation sites:
-  - `run_single_rule(rule)` (services.py:130–164): creates one `RuleResult`, returns it.
-  - `run_all_checks()` (services.py:167–228): creates one `RuleResult` per rule in a loop.
+  - `run_single_rule(rule)` (services.py:215–261): creates one `RuleResult`, returns it.
+  - `run_all_checks()` (services.py:263–314): creates one `RuleResult` per rule in a loop.
 - `monitor/forms.py` — `RuleForm.Meta.fields` lists all current Rule fields explicitly
   (forms.py:34); new fields must be appended here.
 - `data_pulse/settings.py` — No `EMAIL_*` settings present. Uses `django-environ` for
@@ -139,6 +143,10 @@ defaults to `False` and `last_notified_at` defaults to `NULL`.
 Create `monitor/email_service.py` with a single public function
 `send_fail_notification(rule, result)`. The function is pure (no Django view, no
 request object). All email logic lives here; services.py only calls it.
+
+> ⚠️ **Legacy-data guard**: If `Rule.owner` is `None` (legacy data predating S-12),
+> skip notification for that rule. The function already returns `False` early when
+> `rule.owner is None` — do not remove or weaken this guard.
 
 ### Changes Required:
 
@@ -271,7 +279,14 @@ wrapper is needed here.
 **File**: `monitor/services.py`
 
 **Intent**: Same pattern as `run_single_rule` but in `run_all_checks`. The loop
-calls `RuleResult.objects.create(...)` in four branches; all must be covered.
+calls `RuleResult.objects.create(...)` in **five** branches; all must be covered:
+1. No connection object (line 273)
+2. Empty connection URL (line 282)
+3. Connection error branch (line 298)
+4. Successful check result (line 305)
+5. Outer `except Exception` block (line 314) — creates `RuleResult.Status.ERROR`;
+   the return value is not currently captured, so capture it before adding the hook.
+
 In branches that use a local `result` variable, call `send_fail_notification(rule, result)`.
 In branches that call `RuleResult.objects.create(...)` without capturing the return value,
 capture it first.
@@ -519,7 +534,7 @@ SMTP call per rule per hour.
 - Change: `context/changes/email-notifications/change.md`
 - Roadmap item: S-13 in `context/foundation/roadmap.md`
 - Depends on: S-12 (multi-tenancy) — `Rule.owner` FK must exist
-- services.py result creation sites: `monitor/services.py:130–164`, `monitor/services.py:167–228`
+- services.py result creation sites: `monitor/services.py:215–261` (run_single_rule), `monitor/services.py:263–314` (run_all_checks)
 - RuleResult.Status: `monitor/models.py:142–148`
 - RuleForm.Meta.fields: `monitor/forms.py:34`
 - settings.py env pattern: `data_pulse/settings.py` (uses `django-environ`)

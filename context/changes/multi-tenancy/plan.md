@@ -13,7 +13,7 @@ DataPulse has login/logout wired (`data_pulse/urls.py:4-5`) and `@login_required
 - `monitor/models.py:30` — `Connection.name` is `unique=True` globally; must become `unique_together = [('user', 'name')]`
 - `monitor/migrations/` — last migration is `0004`; next is `0005`; two-step FK addition (nullable → data migration → required) needs migrations `0005`, `0006`, `0007`
 - `monitor/forms.py:42` — `RuleForm` shows all `Connection` objects; must be filtered to the current user
-- `monitor/services.py:167` — `run_all_checks()` fetches all rules globally; intentional for the cron path, no change needed
+- `monitor/services.py:263` — `run_all_checks()` fetches `Rule.objects.select_related('connection').all()` globally; intentional for the **cron path** (`run_scheduled` management command, a background job not tied to any user). The `run_checks` view (views.py:47-49) calls `run_all_checks()` directly — this is **UI-triggered**, not cron, and is an IDOR/cross-tenant execution risk: any logged-in user pressing "Run Checks" causes DataPulse to open connections to every other user's PostgreSQL databases using their stored credentials. Phase 3 must close this by adding a `run_checks_for_user(user)` wrapper in services.py and calling it from the view; the cron path continues calling the unscoped `run_all_checks()`
 - `data_pulse/settings.py` — uses `django-environ`; new settings read from `.env` with `env()` defaults
 - `monitor/tests.py` — existing `make_rule()` / `make_connection()` helpers create objects without a `user`; will break after migration `0007` makes FK required; updated in Phase 4
 
@@ -32,7 +32,7 @@ Any visitor can register at `/signup/` using a username and password. After logi
 - Email verification on signup (MVP: `UserCreationForm` only, no token email)
 - Custom User model (Django's `auth.User` is sufficient)
 - Per-user admin isolation (Django admin shows all records to staff; acceptable)
-- Changing `run_all_checks()` scope for cron (keeps running all users' scheduled rules)
+- Changing `run_all_checks()` for the **cron path** (keeps running all users' scheduled rules unscoped — background job, not user-triggered). The UI-triggered `run_checks` view is a separate path fixed in Phase 3 via a new `run_checks_for_user(user)` service wrapper.
 - MySQL / alternative database support (separate slice S-14)
 - Slack / email notifications (separate slices S-13, S-16)
 
@@ -253,7 +253,7 @@ def signup(request):
 #### Automated Verification:
 
 - All existing tests pass: `python manage.py test monitor`
-- `/signup/` returns 200: `python manage.py test monitor.tests.SignupViewTest` (added in Phase 4)
+- `/signup/` returns 200: basic GET smoke check — run `python manage.py test monitor.tests.SignupViewTest.test_signup_get_200` (the class is written in Phase 4 but can be targeted early here to verify signup is not broken before Phase 3 modifies views.py)
 - `/password-reset/` returns 200: `python manage.py runserver` + curl or test
 
 #### Manual Verification:
@@ -290,7 +290,8 @@ Filter all 13 view querysets by `request.user`. Set `user = request.user` on `ru
 
 **Contract** — change each view as follows (all changes are in `monitor/views.py`):
 
-- `dashboard` — change `Rule.objects.select_related('connection').prefetch_related('results').all()` → add `.filter(user=request.user)`
+- `dashboard` — change `Rule.objects.select_related('connection').prefetch_related('results').all()` → add `.filter(user=request.user)`. Note: `last_run = CheckRun.objects.first()` shows the global last run across all users (CheckRun has no `user` FK — out of scope for this change; acceptable for MVP, track for post-MVP cleanup).
+- `run_checks` — **IDOR risk**: this view is UI-triggered, not cron. Replace the `run_all_checks()` call with `run_checks_for_user(request.user)` (new function in services.py — see section 3 below). The cron management command (`run_scheduled`) continues calling the unscoped `run_all_checks()` with no change.
 - `run_single` — change `get_object_or_404(Rule, pk=rule_id)` → `get_object_or_404(Rule, pk=rule_id, user=request.user)`
 - `rule_history` — same `get_object_or_404` pattern
 - `rule_create` — change `form.save()` to `form.save(commit=False)` → set `form.instance.user = request.user` → call `form.instance.save()`. Also pass `user=request.user` to `RuleForm(...)` in both GET and POST branches.
@@ -303,7 +304,24 @@ Filter all 13 view querysets by `request.user`. Set `user = request.user` on `ru
 - `connection_edit` — `get_object_or_404(Connection, pk=conn_id, user=request.user)`
 - `connection_delete` — same
 
-#### 3. RuleForm connection queryset scoping
+#### 3. run_checks_for_user service wrapper
+
+**File**: `monitor/services.py`
+
+**Intent**: Add a `run_checks_for_user(user)` function that scopes the rule queryset to the given user. This closes the cross-tenant execution gap for the UI-triggered `run_checks` view. The existing `run_all_checks()` function is left **untouched** — the cron management command (`run_scheduled`) relies on it to process every user's scheduled rules.
+
+**Contract**:
+```python
+def run_checks_for_user(user) -> CheckRun:
+    run = CheckRun.objects.create()
+    rules = Rule.objects.filter(user=user).select_related('connection')
+    # remainder of logic mirrors run_all_checks() for the user-scoped rule set
+    ...
+    return run
+```
+Alternatively, add a `user=None` parameter to `run_all_checks()` and, when provided, apply `.filter(user=user)` to the queryset. Either approach is acceptable; the key invariant is: the view passes `request.user`, the cron path passes nothing (unscoped).
+
+#### 4. RuleForm connection queryset scoping
 
 **File**: `monitor/forms.py`
 
@@ -333,6 +351,7 @@ def __init__(self, *args, **kwargs):
 - Log in as User A; create a rule. Log in as User B — User A's rule is not visible on dashboard
 - User B cannot access User A's rule via direct URL (e.g. `/rules/1/edit/`) — gets 404, not 403 or the rule content
 - Rule creation form connection dropdown shows only User A's connections when logged in as User A
+- "Run Checks" button (UI) only runs checks for the logged-in user's rules — verify by checking that `RuleResult` records created after button press belong only to the logged-in user's rules
 - Cron command still runs all scheduled rules regardless of user: `python manage.py run_scheduled`
 
 ---
@@ -484,6 +503,7 @@ All queries add a single equality filter on an indexed FK column (`user_id`). No
 
 - [ ] 2.1 All existing tests pass: `python manage.py test monitor`
 - [ ] 2.2 `/password-reset/` returns 200: GET request succeeds
+- [ ] 2.3a `/signup/` returns 200: smoke check before Phase 3 touches views.py — run `python manage.py test monitor.tests.SignupViewTest.test_signup_get_200` (test class written in Phase 4; run a subset early here)
 
 #### Manual
 

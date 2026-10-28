@@ -122,16 +122,17 @@ CharField that records which driver the connection uses. Update the class docstr
 default `'postgresql'`. The inner class must be named `Provider` to follow the pattern
 of `Rule.RuleType`.
 
-#### 2. Django migration — `0006_connection_provider`
+#### 2. Django migration — `0005_connection_provider`
 
-**File**: `monitor/migrations/0006_connection_provider.py`
+**File**: `monitor/migrations/0005_connection_provider.py`
 
 **Intent**: Generated migration that adds the `provider` field with the
 `postgresql` default, leaving all existing rows unaffected.
 
 **Contract**: `python manage.py makemigrations monitor --name connection_provider`
 produces this file; review before committing that it is `AddField` only with
-`default='postgresql'`.
+`default='postgresql'`. The generated filename will be `0005_connection_provider.py`
+(migrations 0001–0004 exist; next number is 0005).
 
 #### 3. `ConnectionForm` — add `provider` field
 
@@ -262,6 +263,23 @@ handling is now inside `_open_conn` (which raises `MonitoredDbError`). The outer
 will differ in scheme). When checking `if url not in conn_cache`, resolve
 `provider = rule.connection.provider` first. Unpack `conn, conn_error, provider =
 conn_cache[url]` before calling `_check_rule`.
+
+**Close-loop update (must be done in the same commit — do not skip)**: The close loop
+at `monitor/services.py:320` currently reads `for conn, _ in conn_cache.values():`
+and unpacks a 2-tuple. After this step the value is a 3-tuple; the loop must become:
+
+```python
+for conn, conn_error, provider in conn_cache.values():
+    if conn:
+        try:
+            conn.close()
+        except Exception:
+            pass
+```
+
+Omitting this update causes `ValueError: too many values to unpack` on every
+`run_all_checks` call, raised after rules complete but before `CheckRun.finished_at`
+is written.
 
 #### 6. Pass `provider` through to `_check_rule`
 
@@ -505,6 +523,7 @@ add one.` to `No connections yet — click <strong>PostgreSQL</strong> or
 #### Automated Verification
 
 - `python manage.py test monitor` passes.
+- `?provider=mysql` pre-selection view test: `r = self.client.get(reverse('monitor:connection_create') + '?provider=mysql'); self.assertEqual(r.context['form'].initial.get('provider'), 'mysql')` — covers the `request.GET.get('provider')` view change added in step 1.
 
 #### Manual Verification
 
@@ -648,7 +667,7 @@ DataPulse handles (per-rule polling, not bulk throughput).
 
 ## Migration Notes
 
-Migration `0006_connection_provider` is additive (`AddField` with
+Migration `0005_connection_provider` is additive (`AddField` with
 `default='postgresql'`). All existing `Connection` rows receive `provider = 'postgresql'`
 automatically. No data transformation required.
 
@@ -724,13 +743,14 @@ automatically. No data transformation required.
 #### Automated
 
 - [ ] 5.1 Full test suite passes
+- [ ] 5.2 ?provider=mysql pre-selection view test passes
 
 #### Manual
 
-- [ ] 5.2 MySQL card is clickable and styled Available
-- [ ] 5.3 Clicking MySQL card pre-selects MySQL provider in form
-- [ ] 5.4 URL placeholder shows mysql+pymysql:// when MySQL selected
-- [ ] 5.5 PostgreSQL card behaviour unchanged
+- [ ] 5.3 MySQL card is clickable and styled Available
+- [ ] 5.4 Clicking MySQL card pre-selects MySQL provider in form
+- [ ] 5.5 URL placeholder shows mysql+pymysql:// when MySQL selected
+- [ ] 5.6 PostgreSQL card behaviour unchanged
 
 ### Phase 6: Tests — Mock MySQL Connection Tests
 

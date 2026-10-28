@@ -1,7 +1,7 @@
 ---
 change_id: advanced-scheduler
 title: Advanced scheduler — configurable schedule with multiple daily runs and cron-style options
-status: planned
+status: plan_reviewed
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

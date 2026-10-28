@@ -176,7 +176,7 @@ before the closing `</div>` of the `.provider-grid`:
 
 #### Automated Verification:
 
-- Django template renders without errors: `python manage.py check --deploy` (or a smoke-render test)
+- Django template renders without errors: `python manage.py check` (template rendering is verified by the Phase 3 UI test)
 
 #### Manual Verification:
 
@@ -237,7 +237,6 @@ Assert `response.status_code == 200`, `b'Slack' in response.content`, and
 ### Unit Tests:
 
 - `SlackNotification` default field values
-- `SlackNotification.__str__` output
 
 ### Integration Tests:
 
@@ -291,3 +290,7 @@ Assert `response.status_code == 200`, `b'Slack' in response.content`, and
 
 - [ ] 3.1 New model and UI tests pass
 - [ ] 3.2 No regressions in existing test suite
+
+#### Manual
+
+- [ ] 3.3 Test suite passes with 2 new tests: SlackNotification model creation and connection_list Slack card visible
