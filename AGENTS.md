@@ -62,3 +62,28 @@ uv run pip-audit                           # dependency vulnerability scan
 ## Migrations
 
 Always run `makemigrations monitor` after changing `monitor/models.py`. Commit the generated migration file alongside the model change.
+<!-- BEGIN @przeprogramowani/10x-cli -->
+
+## Zestaw narzędzi AI 10xDevs - Moduł 4, Lekcja 2 (Mapa Projektu)
+
+Szybko zorientuj się w nieznanym lub starszym repozytorium na podstawie dowodów, a nie drzew katalogów: **najpierw szerokie skanowanie, później głęboka analiza.**
+
+```
+git history + dependency graph + contributors -> context/map/repo-map.md -> focused /10x-research
+```
+
+### Router zadań - od czego zacząć
+
+| Umiejętność / prompt | Użyj, gdy |
+| --- | --- |
+| `/10x-repo-map` | Mapa Projektu w jednym uruchomieniu. Uszeregowuje możliwości biznesowe według krytyczności × rozgłosu, przechowuje dowody w `context/map/evidence/` i zapisuje `context/map/repo-map.md` ze strefami ryzyka, listą lektur na pierwszy dzień oraz jawnymi niewiadomymi. Użyj `--replace`, aby odświeżyć; poprzednie uruchomienie zostanie przeniesione do `context/archive/`. |
+| `m4l2-1-territory-git-history` -> `m4l2-2-structure-dependency-cruiser` -> `m4l2-3-contributors-git` -> `m4l2-repo-map-synthesis` | Ta sama mapa tworzona krok po kroku, po jednym artefakcie naraz, aby można było zobaczyć, co wnosi każde źródło dowodów. |
+| `/10x-research` | Pytanie dotyczące jednej funkcji lub obszaru. Mapa obejmuje szerokość i nie przyjmuje celu; głębokość należy do badań. |
+
+### Twarde zasady
+
+- **Niech narzędzia zbierają dowody poza oknem kontekstu.** Używaj git, forge i narzędzi grafowych do zbierania danych, a następnie interpretuj wyłącznie ich skondensowane wyniki. Nigdy nie czytaj repozytorium plik po pliku.
+- **Wyklucz szum.** Pomijaj pliki lock, wygenerowany kod, commity masowego formatowania, commity botów i commity utworzone przez agentów podczas klasyfikowania aktywności.
+- **Niewiadome są częścią mapy.** Oznaczaj jako niewiadome to, czego nie mogą pokazać dowody, zamiast wypełniać lukę domysłem.
+
+<!-- END @przeprogramowani/10x-cli -->
