@@ -1,7 +1,7 @@
 ---
 change_id: repo-map
 title: Wide Scan — mapa projektu DataPulse
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-27
 archived_at: null

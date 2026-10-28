@@ -1,7 +1,7 @@
 ---
 change_id: s03-connection-management
 title: S-03 Connection management — UI for named PostgreSQL connections
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

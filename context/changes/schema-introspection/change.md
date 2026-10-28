@@ -1,7 +1,7 @@
 ---
 change_id: schema-introspection
 title: S-04 Schema introspection — read tables and columns from connected PostgreSQL
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

@@ -1,7 +1,7 @@
 ---
 change_id: post-mvp-ux
 title: Post-MVP UX — dark UI, auth, side navbar, schedule, per-rule run
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

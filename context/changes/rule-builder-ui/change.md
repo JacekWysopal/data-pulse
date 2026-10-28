@@ -1,7 +1,7 @@
 ---
 change_id: rule-builder-ui
 title: S-05 Rule builder UI — table/column selection from dropdowns
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

@@ -1,7 +1,7 @@
 ---
 change_id: s02-rule-history
 title: Rule history drill-down — US-02 on production
-status: done
+status: implemented
 created: 2026-10-20
 updated: 2026-10-20
 archived_at: null

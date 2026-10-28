@@ -1,7 +1,7 @@
 ---
 change_id: custom-sql-rule
 title: Custom SQL rule — SQL returning true/false as a check condition
-status: proposed
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

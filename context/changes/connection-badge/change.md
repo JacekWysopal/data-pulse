@@ -1,7 +1,7 @@
 ---
 change_id: connection-badge
 title: S-08 Connection badge on rule list — show source database per rule
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null

@@ -1,7 +1,7 @@
 ---
 change_id: s01-smoke-test
 title: US-01 end-to-end smoke test on production
-status: done
+status: implemented
 created: 2026-10-20
 updated: 2026-10-20
 archived_at: null

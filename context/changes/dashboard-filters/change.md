@@ -1,7 +1,7 @@
 ---
 change_id: dashboard-filters
 title: S-07 Dashboard filters — filter rules by status, connection, name
-status: done
+status: implemented
 created: 2026-10-25
 updated: 2026-10-25
 archived_at: null
