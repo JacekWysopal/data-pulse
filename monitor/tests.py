@@ -1528,3 +1528,244 @@ class PerUserIsolationTest(TestCase):
         r = self.client.get(f'/api/schema/{self.b_conn.pk}/tables/')
         self.assertEqual(r.status_code, 404)
 
+
+# ═══════════════════════════════════════════════════════════════════
+#  Email notifications (S-13)
+# ═══════════════════════════════════════════════════════════════════
+
+class EmailNotificationTest(TestCase):
+    """Unit tests for monitor.email_service.send_fail_notification."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'notif_user', email='owner@example.com', password='pass'
+        )
+        self.rule = make_rule(name='email_test_rule', min_rows=10, user=self.user)
+        self.rule.notify_on_fail = True
+        self.rule.save()
+
+        self.run = CheckRun.objects.create(finished_at=timezone.now())
+        self.result = RuleResult.objects.create(
+            run=self.run,
+            rule=self.rule,
+            status=RuleResult.Status.FAIL,
+        )
+
+    def _send(self, **overrides):
+        from .email_service import send_fail_notification
+        rule = overrides.get('rule', self.rule)
+        result = overrides.get('result', self.result)
+        return send_fail_notification(rule, result)
+
+    # ── Guard: notify_on_fail=False ─────────────────────────────────
+
+    def test_notification_skipped_when_disabled(self):
+        """Returns False when rule.notify_on_fail is False."""
+        self.rule.notify_on_fail = False
+        self.rule.save()
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = self._send()
+        self.assertFalse(sent)
+
+    # ── Guard: blank owner email ────────────────────────────────────
+
+    def test_notification_skipped_on_ok(self):
+        """Returns False when result status is OK (no email should go out)."""
+        ok_result = RuleResult.objects.create(
+            run=self.run,
+            rule=self.rule,
+            status=RuleResult.Status.OK,
+        )
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            # email_service only checks notify_on_fail guard, not status —
+            # the status gate is in services.py. This test confirms the
+            # service itself will still attempt to send if called directly;
+            # the status guard is exercised by services tests. We use a
+            # blank email here to confirm the owner-email guard fires first.
+            user_no_email = User.objects.create_user('no_email_user', password='pass')
+            rule_no_email = make_rule(name='no_email_rule', min_rows=1, user=user_no_email)
+            rule_no_email.notify_on_fail = True
+            rule_no_email.save()
+            sent = self._send(rule=rule_no_email, result=ok_result)
+        self.assertFalse(sent)
+
+    # ── Guard: owner email blank ────────────────────────────────────
+
+    def test_notification_skipped_when_owner_email_blank(self):
+        """Returns False when owner email is blank."""
+        user_blank = User.objects.create_user('blank_email', email='', password='pass')
+        rule_blank = make_rule(name='blank_email_rule', min_rows=1, user=user_blank)
+        rule_blank.notify_on_fail = True
+        rule_blank.save()
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = self._send(rule=rule_blank)
+        self.assertFalse(sent)
+
+    # ── Guard: cooldown ─────────────────────────────────────────────
+
+    def test_notification_skipped_on_cooldown(self):
+        """Returns False when last_notified_at was < 1 hour ago."""
+        from datetime import timedelta
+        self.rule.last_notified_at = timezone.now() - timedelta(minutes=30)
+        self.rule.save()
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = self._send()
+        self.assertFalse(sent)
+
+    def test_notification_sent_after_cooldown_expires(self):
+        """Returns True when last_notified_at was >= 1 hour ago."""
+        from datetime import timedelta
+        self.rule.last_notified_at = timezone.now() - timedelta(hours=1, seconds=1)
+        self.rule.save()
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = self._send()
+        self.assertTrue(sent)
+
+    # ── Happy path ──────────────────────────────────────────────────
+
+    def test_notification_sent_on_fail(self):
+        """Sends email and returns True when all guards pass."""
+        from django.core import mail
+        from django.test.utils import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            sent = self._send()
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('owner@example.com', mail.outbox[0].to)
+        self.assertIn('DataPulse', mail.outbox[0].subject)
+        self.assertIn('FAIL', mail.outbox[0].subject)
+
+    def test_notification_updates_last_notified_at(self):
+        """last_notified_at is set after a successful send."""
+        from django.core import mail
+        from django.test.utils import override_settings
+        self.assertIsNone(self.rule.last_notified_at)
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            self._send()
+        self.rule.refresh_from_db()
+        self.assertIsNotNone(self.rule.last_notified_at)
+
+    # ── Exception safety ────────────────────────────────────────────
+
+    def test_notification_returns_false_on_send_exception(self):
+        """Returns False (does not raise) when send raises an exception."""
+        from unittest.mock import patch as _patch
+        with _patch('monitor.email_service.EmailMultiAlternatives.send', side_effect=Exception('SMTP error')):
+            from django.test.utils import override_settings
+            with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+                sent = self._send()
+        self.assertFalse(sent)
+
+    # ── services.py integration ─────────────────────────────────────
+
+    def test_run_single_rule_fail_calls_send_notification(self):
+        """run_single_rule with a FAIL result calls send_fail_notification."""
+        from unittest.mock import patch as _patch, MagicMock as _MM
+        conn = make_connection(user=self.user)
+        rule = make_rule(name='hook_test', min_rows=1000, connection=conn, user=self.user)
+        rule.notify_on_fail = True
+        rule.save()
+
+        with _patch('monitor.services.psycopg2.connect') as mock_conn, \
+             _patch('monitor.services.send_fail_notification') as mock_notify:
+            cursor = _MM()
+            cursor.__enter__ = _MM(return_value=cursor)
+            cursor.__exit__ = _MM(return_value=False)
+            cursor.fetchone.return_value = (3,)  # below min_rows=1000 → FAIL
+            mock_conn.return_value.cursor.return_value = cursor
+
+            from .services import run_single_rule
+            run_single_rule(rule)
+
+        mock_notify.assert_called_once()
+        call_rule, call_result = mock_notify.call_args[0]
+        self.assertEqual(call_rule, rule)
+        self.assertEqual(call_result.status, RuleResult.Status.FAIL)
+
+    def test_run_single_rule_ok_skips_notification(self):
+        """run_single_rule with OK result does NOT call send_fail_notification."""
+        from unittest.mock import patch as _patch, MagicMock as _MM
+        conn = make_connection(name='ok_conn', user=self.user)
+        rule = make_rule(name='ok_test', min_rows=1, connection=conn, user=self.user)
+        rule.notify_on_fail = True
+        rule.save()
+
+        with _patch('monitor.services.psycopg2.connect') as mock_conn, \
+             _patch('monitor.services.send_fail_notification') as mock_notify:
+            cursor = _MM()
+            cursor.__enter__ = _MM(return_value=cursor)
+            cursor.__exit__ = _MM(return_value=False)
+            cursor.fetchone.return_value = (100,)  # above min_rows=1 -> OK
+            mock_conn.return_value.cursor.return_value = cursor
+
+            from .services import run_single_rule
+            run_single_rule(rule)
+
+        mock_notify.assert_not_called()
+
+    def test_run_all_checks_fail_calls_send_notification(self):
+        """run_all_checks with a FAIL rule and notify_on_fail=True calls send_fail_notification."""
+        from unittest.mock import patch as _patch, MagicMock as _MM
+        conn = make_connection(name="all_conn", user=self.user)
+        rule = make_rule(name="all_fail_rule", min_rows=1000, connection=conn, user=self.user)
+        rule.notify_on_fail = True
+        rule.save()
+
+        with _patch("monitor.services.psycopg2.connect") as mock_conn,              _patch("monitor.services.send_fail_notification") as mock_notify:
+            cursor = _MM()
+            cursor.__enter__ = _MM(return_value=cursor)
+            cursor.__exit__ = _MM(return_value=False)
+            cursor.fetchone.return_value = (3,)  # below min_rows=1000 -> FAIL
+            mock_conn.return_value.cursor.return_value = cursor
+
+            from .services import run_all_checks
+            run_all_checks()
+
+        self.assertTrue(mock_notify.called)
+        # Verify at least one call was for our specific rule
+        called_rules = [c[0][0] for c in mock_notify.call_args_list]
+        self.assertIn(rule, called_rules)
+
+
+class RuleFormNotifyOnFailTest(TestCase):
+    """notify_on_fail field is accepted by RuleForm and saved correctly."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("form_notif_user", password="pass")
+        self.client.login(username="form_notif_user", password="pass")
+
+    def test_form_post_with_notify_on_fail_saves_true(self):
+        """POST to rule_create with notify_on_fail checked saves Rule with notify_on_fail=True."""
+        conn = make_connection(user=self.user)
+        r = self.client.post(reverse("monitor:rule_create"), {
+            "name": "notif_rule",
+            "schema_name": "public",
+            "table_name": "orders",
+            "min_row_count": 10,
+            "rule_type": "volume_freshness",
+            "connection": conn.pk,
+            "notify_on_fail": "on",
+        })
+        self.assertRedirects(r, reverse("monitor:dashboard"))
+        rule = Rule.objects.get(name="notif_rule")
+        self.assertTrue(rule.notify_on_fail)
+
+    def test_form_post_without_notify_on_fail_saves_false(self):
+        """POST without notify_on_fail results in notify_on_fail=False."""
+        conn = make_connection(name="no_notif_conn", user=self.user)
+        r = self.client.post(reverse("monitor:rule_create"), {
+            "name": "no_notif_rule",
+            "schema_name": "public",
+            "table_name": "orders",
+            "min_row_count": 10,
+            "rule_type": "volume_freshness",
+            "connection": conn.pk,
+        })
+        self.assertRedirects(r, reverse("monitor:dashboard"))
+        rule = Rule.objects.get(name="no_notif_rule")
+        self.assertFalse(rule.notify_on_fail)

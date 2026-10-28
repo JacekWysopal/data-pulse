@@ -13,6 +13,7 @@ import pymysql
 import pymysql.err
 from django.utils import timezone
 
+from .email_service import send_fail_notification
 from .models import CheckRun, Connection, Rule, RuleResult
 
 SCHEMA_CACHE_TTL = 300  # 5 minutes
@@ -295,6 +296,8 @@ def run_single_rule(rule: Rule) -> RuleResult:
                 status=RuleResult.Status.ERROR,
                 error_message='No connection assigned. Add a Connection in the Connections page and assign it to this rule.',
             )
+            if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                send_fail_notification(rule, result)
         else:
             url = rule.connection.get_database_url()
             provider = rule.connection.provider
@@ -304,6 +307,8 @@ def run_single_rule(rule: Rule) -> RuleResult:
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty. Edit the connection and provide a valid database URL.',
                 )
+                if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, result)
             else:
                 try:
                     conn = _open_conn(url, provider)
@@ -316,18 +321,24 @@ def run_single_rule(rule: Rule) -> RuleResult:
                         last_record_age_hours=data['last_record_age_hours'],
                         error_message=data['error_message'],
                     )
+                    if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                        send_fail_notification(rule, result)
                 except MonitoredDbError as e:
                     result = RuleResult.objects.create(
                         run=run, rule=rule,
                         status=RuleResult.Status.ERROR,
                         error_message=str(e),
                     )
+                    if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                        send_fail_notification(rule, result)
     except Exception as e:
         result = RuleResult.objects.create(
             run=run, rule=rule,
             status=RuleResult.Status.ERROR,
             error_message=str(e),
         )
+        if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+            send_fail_notification(rule, result)
 
     run.finished_at = timezone.now()
     run.save()
@@ -383,13 +394,15 @@ def run_checks_for_user(user) -> CheckRun:
                 )
             else:
                 result = _check_rule(conn, rule, provider)
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=result['status'],
                     row_count=result['row_count'],
                     last_record_age_hours=result['last_record_age_hours'],
                     error_message=result['error_message'],
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, db_result)
 
         except Exception as e:
             RuleResult.objects.create(
@@ -421,21 +434,25 @@ def run_all_checks() -> CheckRun:
     for rule in rules:
         try:
             if not rule.connection_id:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message='No connection assigned. Add a Connection and assign it to this rule.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, db_result)
                 continue
 
             url = rule.connection.get_database_url()
             provider = rule.connection.provider
             if not url:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, db_result)
                 continue
 
             if url not in conn_cache:
@@ -447,27 +464,33 @@ def run_all_checks() -> CheckRun:
             conn, conn_error, provider = conn_cache[url]
 
             if conn_error or conn is None:
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=RuleResult.Status.ERROR,
                     error_message=conn_error or 'Connection failed.',
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, db_result)
             else:
                 result = _check_rule(conn, rule, provider)
-                RuleResult.objects.create(
+                db_result = RuleResult.objects.create(
                     run=run, rule=rule,
                     status=result['status'],
                     row_count=result['row_count'],
                     last_record_age_hours=result['last_record_age_hours'],
                     error_message=result['error_message'],
                 )
+                if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                    send_fail_notification(rule, db_result)
 
         except Exception as e:
-            RuleResult.objects.create(
+            db_result = RuleResult.objects.create(
                 run=run, rule=rule,
                 status=RuleResult.Status.ERROR,
                 error_message=str(e),
             )
+            if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+                send_fail_notification(rule, db_result)
 
     for conn, conn_error, provider in conn_cache.values():
         if conn:

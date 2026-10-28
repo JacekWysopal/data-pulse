@@ -34,7 +34,7 @@ class ConnectionForm(forms.ModelForm):
 class RuleForm(forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron']
+        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'schema_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'public'}),
@@ -56,6 +56,7 @@ class RuleForm(forms.ModelForm):
                 'placeholder': '0 8 * * *',
                 'id': 'id_schedule_cron',
             }),
+            'notify_on_fail': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):

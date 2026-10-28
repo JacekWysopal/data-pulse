@@ -298,6 +298,25 @@
       {% if form.schedule_cron.errors %}<div class="field-error">✗ {{ form.schedule_cron.errors|join:", " }}</div>{% endif %}
     </div>
 
+    <!-- ── Notifications ── -->
+    <div class="form-section-label">Notifications</div>
+    <div class="mb-4">
+      <div class="form-check">
+        {{ form.notify_on_fail }}
+        <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
+          Notify me on failure
+        </label>
+      </div>
+      <div class="form-text" style="margin-top:4px">
+        Send an email when this rule returns FAIL or ERROR.
+        Requires your account to have an email address set.
+        Cooldown: at most one email per hour per rule.
+      </div>
+      {% if form.notify_on_fail.errors %}
+        <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
     <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
       <button type="submit" class="btn-dp btn-dp-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>

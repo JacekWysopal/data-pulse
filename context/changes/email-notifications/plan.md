@@ -547,9 +547,9 @@ SMTP call per rule per hour.
 
 #### Automated
 
-- [ ] 1.1 makemigrations check exits 0 after adding fields
-- [ ] 1.2 migrate applies cleanly on SQLite
-- [ ] 1.3 existing test suite passes after migration
+- [x] 1.1 makemigrations check exits 0 after adding fields
+- [x] 1.2 migrate applies cleanly on SQLite
+- [x] 1.3 existing test suite passes after migration
 
 #### Manual
 
@@ -559,12 +559,12 @@ SMTP call per rule per hour.
 
 #### Automated
 
-- [ ] 2.1 unit test — returns False when notify_on_fail=False
-- [ ] 2.2 unit test — returns False when owner email blank
-- [ ] 2.3 unit test — returns False when within cooldown window
-- [ ] 2.4 unit test — sends email and returns True when all guards pass
-- [ ] 2.5 unit test — updates last_notified_at after successful send
-- [ ] 2.6 unit test — returns False (no raise) on send exception
+- [x] 2.1 unit test — returns False when notify_on_fail=False
+- [x] 2.2 unit test — returns False when owner email blank
+- [x] 2.3 unit test — returns False when within cooldown window
+- [x] 2.4 unit test — sends email and returns True when all guards pass
+- [x] 2.5 unit test — updates last_notified_at after successful send
+- [x] 2.6 unit test — returns False (no raise) on send exception
 
 #### Manual
 
@@ -574,10 +574,10 @@ SMTP call per rule per hour.
 
 #### Automated
 
-- [ ] 3.1 run_single_rule FAIL calls send_fail_notification (mocked)
-- [ ] 3.2 run_all_checks FAIL/notify_on_fail=True calls send_fail_notification (mocked)
-- [ ] 3.3 run_single_rule OK does NOT call send_fail_notification
-- [ ] 3.4 all existing tests pass
+- [x] 3.1 run_single_rule FAIL calls send_fail_notification (mocked)
+- [x] 3.2 run_all_checks FAIL/notify_on_fail=True calls send_fail_notification (mocked)
+- [x] 3.3 run_single_rule OK does NOT call send_fail_notification
+- [x] 3.4 all existing tests pass
 
 #### Manual
 
@@ -587,8 +587,8 @@ SMTP call per rule per hour.
 
 #### Automated
 
-- [ ] 4.1 form POST with notify_on_fail=True saves correctly
-- [ ] 4.2 full test suite passes
+- [x] 4.1 form POST with notify_on_fail=True saves correctly
+- [x] 4.2 full test suite passes
 
 #### Manual
 
@@ -600,8 +600,8 @@ SMTP call per rule per hour.
 
 #### Automated
 
-- [ ] 5.1 python manage.py check exits 0 with new EMAIL_* settings
-- [ ] 5.2 full test suite passes
+- [x] 5.1 python manage.py check exits 0 with new EMAIL_* settings
+- [x] 5.2 full test suite passes
 
 #### Manual
 

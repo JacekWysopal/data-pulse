@@ -14,6 +14,20 @@ services:
         value: "False"
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp.sendgrid.net"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: "apikey"
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: "DataPulse <no-reply@yourdomain.com>"
 
   - type: cron
     name: data-pulse-scheduler

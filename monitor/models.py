@@ -163,6 +163,17 @@ class Rule(models.Model):
         help_text='5-field UTC cron, e.g. 0 8 * * *. Only when schedule_type = custom_cron.',
     )
 
+    notify_on_fail = models.BooleanField(
+        default=False,
+        verbose_name='Notify on failure',
+        help_text='Send an email to the rule owner when this rule returns FAIL or ERROR.',
+    )
+    last_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Last notified at',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

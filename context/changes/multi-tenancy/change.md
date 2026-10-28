@@ -1,7 +1,7 @@
 ---
 change_id: multi-tenancy
 title: Multi-tenancy — user accounts, per-user rules and connections
-status: implemented
+status: impl_reviewed
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null

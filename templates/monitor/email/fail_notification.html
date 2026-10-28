@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DataPulse — Rule Check Failure</title>
+</head>
+<body style="margin:0;padding:0;background:#0f1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#e2e8f0">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;padding:32px 16px">
+    <tr>
+      <td align="center">
+        <table width="520" cellpadding="0" cellspacing="0" border="0" style="background:#1a1d2e;border:1px solid #2d3148;border-radius:12px;overflow:hidden;max-width:520px;width:100%">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:24px 28px 20px;border-bottom:1px solid #2d3148">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6366f1">DataPulse</span>
+                  </td>
+                  <td align="right">
+                    {% if result.status == 'FAIL' %}
+                      <span style="display:inline-block;padding:3px 10px;border-radius:20px;background:#451a1a;color:#f87171;font-size:0.75rem;font-weight:700;letter-spacing:0.05em">FAIL</span>
+                    {% else %}
+                      <span style="display:inline-block;padding:3px 10px;border-radius:20px;background:#3d1a0d;color:#fb923c;font-size:0.75rem;font-weight:700;letter-spacing:0.05em">ERROR</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td style="padding:24px 28px 8px">
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:#f1f5f9">{{ rule.name }}</h1>
+              <p style="margin:6px 0 0;font-size:0.82rem;color:#94a3b8">Rule check returned {{ result.status }} at {{ result.checked_at|date:"Y-m-d H:i" }} UTC</p>
+            </td>
+          </tr>
+
+          <!-- Details table -->
+          <tr>
+            <td style="padding:16px 28px 24px">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;border:1px solid #2d3148;border-radius:8px;overflow:hidden">
+                {% if rule.schema_name and rule.table_name %}
+                <tr style="border-bottom:1px solid #2d3148">
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#94a3b8;font-weight:600;width:140px">Table</td>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#e2e8f0;font-family:monospace">{{ rule.schema_name }}.{{ rule.table_name }}</td>
+                </tr>
+                {% else %}
+                <tr style="border-bottom:1px solid #2d3148">
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#94a3b8;font-weight:600;width:140px">Rule type</td>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#e2e8f0">Custom SQL</td>
+                </tr>
+                {% endif %}
+
+                {% if result.row_count is not None %}
+                <tr style="border-bottom:1px solid #2d3148">
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#94a3b8;font-weight:600">Row count</td>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#e2e8f0">{{ result.row_count }}</td>
+                </tr>
+                {% endif %}
+
+                {% if result.last_record_age_hours is not None %}
+                <tr style="border-bottom:1px solid #2d3148">
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#94a3b8;font-weight:600">Record age</td>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#e2e8f0">{{ result.last_record_age_hours|floatformat:1 }} hours</td>
+                </tr>
+                {% endif %}
+
+                {% if result.error_message %}
+                <tr>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#94a3b8;font-weight:600;vertical-align:top">Error</td>
+                  <td style="padding:10px 16px;font-size:0.78rem;color:#f87171;font-family:monospace">{{ result.error_message }}</td>
+                </tr>
+                {% endif %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px;border-top:1px solid #2d3148;background:#161929">
+              <p style="margin:0;font-size:0.72rem;color:#64748b">
+                This email was sent by DataPulse because <strong style="color:#94a3b8">Notify on failure</strong> is enabled for this rule.
+                Cooldown: at most one email per hour per rule.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
