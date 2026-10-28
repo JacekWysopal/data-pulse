@@ -1,7 +1,7 @@
 ---
 change_id: ui-glass-command
 title: UI redesign — Glass Command theme with collapsible sidebar
-status: implemented
+status: impl_reviewed
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null
