@@ -1,7 +1,7 @@
 ---
 change_id: trend-sparklines
 title: Trend sparklines — row count and age history charts in rule list
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

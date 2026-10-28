@@ -440,7 +440,7 @@ Slack webhooks, check templates, REST API, alert digest, sparklines, row samplin
 |---|---|---|---|
 | S-18 | Slack/Teams webhook notifications ⭐ | — | new |
 | S-19 | Check templates — null, uniqueness, referential integrity | — | new |
-| S-20 | REST API + API keys | — | new |
+| S-20 | REST API + API keys | — | planning |
 | S-21 | Alert digest — group notifications per run | S-18 | new |
 | S-22 | Trend sparklines — history charts in rule list | — | new |
 | S-23 | Row sampling on failure — show example failing rows | — | new |

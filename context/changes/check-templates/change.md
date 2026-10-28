@@ -1,7 +1,7 @@
 ---
 change_id: check-templates
 title: Built-in rule check templates — null, uniqueness, referential integrity
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null
