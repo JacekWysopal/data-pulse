@@ -487,10 +487,10 @@ All queries add a single equality filter on an indexed FK column (`user_id`). No
 
 #### Automated
 
-- [ ] 1.1 Migrations apply cleanly: `python manage.py migrate --run-syncdb`
-- [ ] 1.2 Migration 0005 adds user_id columns: `python manage.py sqlmigrate monitor 0005`
-- [ ] 1.3 Migration 0006 runs without error; Rule.objects.filter(user=None).count() == 0
-- [ ] 1.4 All existing tests pass: `python manage.py test monitor`
+- [x] 1.1 Migrations apply cleanly: `python manage.py migrate --run-syncdb`
+- [x] 1.2 Migration 0005 adds user_id columns: `python manage.py sqlmigrate monitor 0005`
+- [x] 1.3 Migration 0006 runs without error; Rule.objects.filter(user=None).count() == 0
+- [x] 1.4 All existing tests pass: `python manage.py test monitor`
 
 #### Manual
 
@@ -501,15 +501,15 @@ All queries add a single equality filter on an indexed FK column (`user_id`). No
 
 #### Automated
 
-- [ ] 2.1 All existing tests pass: `python manage.py test monitor`
-- [ ] 2.2 `/password-reset/` returns 200: GET request succeeds
-- [ ] 2.3a `/signup/` returns 200: smoke check before Phase 3 touches views.py — run `python manage.py test monitor.tests.SignupViewTest.test_signup_get_200` (test class written in Phase 4; run a subset early here)
+- [x] 2.1 All existing tests pass: `python manage.py test monitor`
+- [x] 2.2 `/password-reset/` returns 200: GET request succeeds
+- [x] 2.3a `/signup/` returns 200: smoke check before Phase 3 touches views.py — run `python manage.py test monitor.tests.SignupViewTest.test_signup_get_200` (test class written in Phase 4; run a subset early here)
 
 #### Manual
 
 - [ ] 2.3 `/signup/` renders form with username + password fields
 - [ ] 2.4 Valid signup creates user and redirects to dashboard
-- [ ] 2.5 Login page shows "Sign up" and "Forgot password?" links
+- [ ] 2.5 Login page shows “Sign up” and “Forgot password?” links
 - [ ] 2.6 Password reset form renders at `/password-reset/`
 - [ ] 2.7 Submitting password reset prints token to console in dev (EMAIL_BACKEND=console)
 
@@ -517,24 +517,24 @@ All queries add a single equality filter on an indexed FK column (`user_id`). No
 
 #### Automated
 
-- [ ] 3.1 Migration 0007 applies cleanly: `python manage.py migrate`
-- [ ] 3.2 No Rule or Connection rows have user=None after migration
-- [ ] 3.3 All updated view tests pass: `python manage.py test monitor`
+- [x] 3.1 Migration 0007 applies cleanly: `python manage.py migrate`
+- [x] 3.2 No Rule or Connection rows have user=None after migration
+- [x] 3.3 All updated view tests pass: `python manage.py test monitor`
 
 #### Manual
 
-- [ ] 3.4 User B cannot see User A's rules on dashboard
-- [ ] 3.5 Direct URL to User A's rule returns 404 when logged in as User B
-- [ ] 3.6 Rule creation form connection dropdown shows only current user's connections
+- [ ] 3.4 User B cannot see User A’s rules on dashboard
+- [ ] 3.5 Direct URL to User A’s rule returns 404 when logged in as User B
+- [ ] 3.6 Rule creation form connection dropdown shows only current user’s connections
 - [ ] 3.7 Cron command runs all scheduled rules: `python manage.py run_scheduled`
 
 ### Phase 4: Tests
 
 #### Automated
 
-- [ ] 4.1 Full test suite passes: `python manage.py test monitor`
-- [ ] 4.2 PerUserIsolationTest passes: `python manage.py test monitor.tests.PerUserIsolationTest`
-- [ ] 4.3 SignupViewTest passes: `python manage.py test monitor.tests.SignupViewTest`
+- [x] 4.1 Full test suite passes: `python manage.py test monitor`
+- [x] 4.2 PerUserIsolationTest passes: `python manage.py test monitor.tests.PerUserIsolationTest`
+- [x] 4.3 SignupViewTest passes: `python manage.py test monitor.tests.SignupViewTest`
 
 #### Manual
 

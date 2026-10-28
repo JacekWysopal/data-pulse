@@ -1,9 +1,9 @@
 ---
 change_id: advanced-scheduler
 title: Advanced scheduler — configurable schedule with multiple daily runs and cron-style options
-status: implementing
+status: impl_reviewed
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2025-01-27
 archived_at: null
 ---
 

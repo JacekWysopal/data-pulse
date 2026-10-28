@@ -24,7 +24,7 @@ from .models import CheckRun, Connection, Rule, RuleResult, SlackNotification
 def make_rule(name='test_rule', schema='public', table='orders',
               min_rows=None, ts_col=None, max_age=None,
               rule_type='volume_freshness', custom_sql='',
-              connection=None):
+              connection=None, user=None):
     """Factory for Rule objects."""
     return Rule.objects.create(
         name=name,
@@ -36,27 +36,28 @@ def make_rule(name='test_rule', schema='public', table='orders',
         rule_type=rule_type,
         custom_sql=custom_sql,
         connection=connection,
+        user=user,
     )
 
 
-def make_connection(name='test_conn', url='postgresql://user:pass@host/db'):
-    conn = Connection(name=name)
+def make_connection(name='test_conn', url='postgresql://user:pass@host/db', user=None):
+    conn = Connection(name=name, user=user)
     conn.set_database_url(url)
     conn.save()
     return conn
 
 
-def make_run(ok=0, fail=0, error=0):
+def make_run(ok=0, fail=0, error=0, user=None):
     """Create a CheckRun with pre-built results."""
     run = CheckRun.objects.create(finished_at=timezone.now())
     for _ in range(ok):
-        rule = make_rule(name=f'ok_{_}', min_rows=1)
+        rule = make_rule(name=f'ok_{_}', min_rows=1, user=user)
         RuleResult.objects.create(run=run, rule=rule, status='OK', row_count=5)
     for _ in range(fail):
-        rule = make_rule(name=f'fail_{_}', min_rows=100)
+        rule = make_rule(name=f'fail_{_}', min_rows=100, user=user)
         RuleResult.objects.create(run=run, rule=rule, status='FAIL', row_count=3)
     for _ in range(error):
-        rule = make_rule(name=f'err_{_}', min_rows=1)
+        rule = make_rule(name=f'err_{_}', min_rows=1, user=user)
         RuleResult.objects.create(run=run, rule=rule, status='ERROR', error_message='boom')
     return run
 
@@ -67,12 +68,15 @@ def make_run(ok=0, fail=0, error=0):
 
 class ConnectionModelTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('conn_model_user', password='pass')
+
     def test_set_and_get_database_url_plaintext(self):
-        conn = make_connection(url='postgresql://u:p@host/db')
+        conn = make_connection(url='postgresql://u:p@host/db', user=self.user)
         self.assertEqual(conn.get_database_url(), 'postgresql://u:p@host/db')
 
     def test_masked_url_hides_password(self):
-        conn = make_connection(url='postgresql://user:supersecret@host:5432/db')
+        conn = make_connection(url='postgresql://user:supersecret@host:5432/db', user=self.user)
         masked = conn.masked_url
         self.assertNotIn('supersecret', masked)
         self.assertIn('***', masked)
@@ -80,44 +84,47 @@ class ConnectionModelTest(TestCase):
         self.assertIn('host', masked)
 
     def test_masked_url_empty_string_on_empty_url(self):
-        conn = Connection(name='empty')
+        conn = Connection(name='empty', user=self.user)
         conn._database_url = ''
         self.assertEqual(conn.masked_url, '')
 
     def test_connection_str(self):
-        conn = make_connection(name='production')
+        conn = make_connection(name='production', user=self.user)
         self.assertIn('production', str(conn))
         self.assertIn('PostgreSQL', str(conn))
 
 
 class RuleModelTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('rule_model_user', password='pass')
+
     def test_volume_rule_str(self):
-        rule = make_rule(name='orders_vol', schema='public', table='orders', min_rows=100)
+        rule = make_rule(name='orders_vol', schema='public', table='orders', min_rows=100, user=self.user)
         self.assertIn('orders_vol', str(rule))
 
     def test_full_table_name_with_schema(self):
-        rule = make_rule(schema='analytics', table='events', min_rows=1)
+        rule = make_rule(schema='analytics', table='events', min_rows=1, user=self.user)
         self.assertEqual(rule.full_table_name, '"analytics"."events"')
 
     def test_full_table_name_empty_when_no_schema(self):
-        rule = make_rule(schema='', table='', custom_sql='SELECT 1', rule_type='custom_sql')
+        rule = make_rule(schema='', table='', custom_sql='SELECT 1', rule_type='custom_sql', user=self.user)
         self.assertIsNone(rule.full_table_name)
 
     def test_is_custom_sql_true(self):
-        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT true')
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT true', user=self.user)
         self.assertTrue(rule.is_custom_sql)
 
     def test_is_custom_sql_false(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         self.assertFalse(rule.is_custom_sql)
 
     def test_last_result_none_when_no_results(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         self.assertIsNone(rule.last_result)
 
     def test_last_result_returns_latest(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         run1 = CheckRun.objects.create(finished_at=timezone.now())
         run2 = CheckRun.objects.create(finished_at=timezone.now())
         RuleResult.objects.create(run=run1, rule=rule, status='OK')
@@ -127,8 +134,11 @@ class RuleModelTest(TestCase):
 
 class CheckRunModelTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('checkrun_user', password='pass')
+
     def test_ok_fail_error_counts(self):
-        run = make_run(ok=3, fail=2, error=1)
+        run = make_run(ok=3, fail=2, error=1, user=self.user)
         self.assertEqual(run.ok_count, 3)
         self.assertEqual(run.fail_count, 2)
         self.assertEqual(run.error_count, 1)
@@ -144,6 +154,9 @@ class CheckRunModelTest(TestCase):
 
 class CheckVolumeFreshnessTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('vol_fresh_user', password='pass')
+
     def _mock_conn(self, fetchone_return):
         conn = MagicMock()
         cursor = MagicMock()
@@ -155,7 +168,7 @@ class CheckVolumeFreshnessTest(TestCase):
 
     def test_volume_ok(self):
         from .services import _check_volume_freshness
-        rule = make_rule(min_rows=10)
+        rule = make_rule(min_rows=10, user=self.user)
         conn = self._mock_conn((50,))
         result = _check_volume_freshness(conn, rule)
         self.assertEqual(result['status'], 'OK')
@@ -163,7 +176,7 @@ class CheckVolumeFreshnessTest(TestCase):
 
     def test_volume_fail(self):
         from .services import _check_volume_freshness
-        rule = make_rule(min_rows=100)
+        rule = make_rule(min_rows=100, user=self.user)
         conn = self._mock_conn((5,))
         result = _check_volume_freshness(conn, rule)
         self.assertEqual(result['status'], 'FAIL')
@@ -171,7 +184,7 @@ class CheckVolumeFreshnessTest(TestCase):
 
     def test_freshness_ok(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=24)
+        rule = make_rule(ts_col='created_at', max_age=24, user=self.user)
         conn = self._mock_conn((2.5,))
         result = _check_volume_freshness(conn, rule)
         self.assertEqual(result['status'], 'OK')
@@ -179,14 +192,14 @@ class CheckVolumeFreshnessTest(TestCase):
 
     def test_freshness_fail(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=1)
+        rule = make_rule(ts_col='created_at', max_age=1, user=self.user)
         conn = self._mock_conn((3.0,))
         result = _check_volume_freshness(conn, rule)
         self.assertEqual(result['status'], 'FAIL')
 
     def test_freshness_null_age_fails(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=1)
+        rule = make_rule(ts_col='created_at', max_age=1, user=self.user)
         conn = self._mock_conn((None,))
         result = _check_volume_freshness(conn, rule)
         self.assertEqual(result['status'], 'FAIL')
@@ -194,7 +207,7 @@ class CheckVolumeFreshnessTest(TestCase):
     def test_db_error_returns_error_status(self):
         from .services import _check_volume_freshness
         import psycopg2
-        rule = make_rule(min_rows=10)
+        rule = make_rule(min_rows=10, user=self.user)
         conn = MagicMock()
         cursor = MagicMock()
         cursor.__enter__ = MagicMock(return_value=cursor)
@@ -208,7 +221,7 @@ class CheckVolumeFreshnessTest(TestCase):
     def test_both_conditions_fail_on_first(self):
         """If volume fails, status should be FAIL even if freshness is not checked yet."""
         from .services import _check_volume_freshness
-        rule = make_rule(min_rows=100, ts_col='ts', max_age=1)
+        rule = make_rule(min_rows=100, ts_col='ts', max_age=1, user=self.user)
         conn = MagicMock()
         cursor = MagicMock()
         cursor.__enter__ = MagicMock(return_value=cursor)
@@ -225,8 +238,11 @@ class CheckVolumeFreshnessTest(TestCase):
 
 class CheckCustomSQLTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('custom_sql_user', password='pass')
+
     def _make_sql_rule(self, sql):
-        return make_rule(rule_type='custom_sql', custom_sql=sql)
+        return make_rule(rule_type='custom_sql', custom_sql=sql, user=self.user)
 
     def _mock_conn(self, fetchone_return):
         conn = MagicMock()
@@ -352,6 +368,9 @@ class CheckCustomSQLTest(TestCase):
 
 class RunAllChecksTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('run_all_user', password='pass')
+
     @patch('monitor.services.psycopg2.connect')
     def test_creates_checkrun(self, mock_connect):
         cursor = MagicMock()
@@ -360,8 +379,8 @@ class RunAllChecksTest(TestCase):
         cursor.fetchone.return_value = (10,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
-        make_rule(min_rows=5, connection=conn)
+        conn = make_connection(user=self.user)
+        make_rule(min_rows=5, connection=conn, user=self.user)
         from .services import run_all_checks
         run = run_all_checks()
 
@@ -376,10 +395,10 @@ class RunAllChecksTest(TestCase):
         cursor.fetchone.return_value = (50,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
-        make_rule(name='r1', min_rows=10, connection=conn)
-        make_rule(name='r2', min_rows=20, connection=conn)
-        make_rule(name='r3', min_rows=30, connection=conn)
+        conn = make_connection(user=self.user)
+        make_rule(name='r1', min_rows=10, connection=conn, user=self.user)
+        make_rule(name='r2', min_rows=20, connection=conn, user=self.user)
+        make_rule(name='r3', min_rows=30, connection=conn, user=self.user)
 
         from .services import run_all_checks
         run = run_all_checks()
@@ -391,9 +410,9 @@ class RunAllChecksTest(TestCase):
         import psycopg2
         mock_connect.side_effect = psycopg2.OperationalError('refused')
 
-        conn = make_connection()
-        make_rule(name='r1', min_rows=1, connection=conn)
-        make_rule(name='r2', min_rows=1, connection=conn)
+        conn = make_connection(user=self.user)
+        make_rule(name='r1', min_rows=1, connection=conn, user=self.user)
+        make_rule(name='r2', min_rows=1, connection=conn, user=self.user)
 
         from .services import run_all_checks
         run = run_all_checks()
@@ -401,7 +420,7 @@ class RunAllChecksTest(TestCase):
         self.assertEqual(run.results.filter(status='ERROR').count(), 2)
 
     def test_no_connection_marks_rules_error(self):
-        make_rule(name='r1', min_rows=1)  # no connection
+        make_rule(name='r1', min_rows=1, user=self.user)  # no connection
         from .services import run_all_checks
         run = run_all_checks()
         result = run.results.first()
@@ -428,10 +447,10 @@ class RunAllChecksTest(TestCase):
         conn2.cursor.return_value = bad_cursor
         mock_connect.side_effect = [conn1, conn2]
 
-        conn_obj1 = make_connection('c1', 'postgresql://u:p@h/db1')
-        conn_obj2 = make_connection('c2', 'postgresql://u:p@h/db2')
-        make_rule(name='good', min_rows=10, connection=conn_obj1)
-        make_rule(name='bad', min_rows=10, connection=conn_obj2)
+        conn_obj1 = make_connection('c1', 'postgresql://u:p@h/db1', user=self.user)
+        conn_obj2 = make_connection('c2', 'postgresql://u:p@h/db2', user=self.user)
+        make_rule(name='good', min_rows=10, connection=conn_obj1, user=self.user)
+        make_rule(name='bad', min_rows=10, connection=conn_obj2, user=self.user)
 
         from .services import run_all_checks
         run = run_all_checks()
@@ -447,6 +466,9 @@ class RunAllChecksTest(TestCase):
 
 class RunSingleRuleTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('single_rule_user', password='pass')
+
     @patch('monitor.services.psycopg2.connect')
     def test_creates_checkrun_and_result(self, mock_connect):
         cursor = MagicMock()
@@ -455,8 +477,8 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (5,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
-        rule = make_rule(min_rows=1, connection=conn)
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=1, connection=conn, user=self.user)
         from .services import run_single_rule
         result = run_single_rule(rule)
 
@@ -471,8 +493,8 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (100,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
-        rule = make_rule(min_rows=50, connection=conn)
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=50, connection=conn, user=self.user)
         from .services import run_single_rule
         result = run_single_rule(rule)
         self.assertEqual(result.status, 'OK')
@@ -485,14 +507,14 @@ class RunSingleRuleTest(TestCase):
         cursor.fetchone.return_value = (3,)
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
-        rule = make_rule(min_rows=100, connection=conn)
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=100, connection=conn, user=self.user)
         from .services import run_single_rule
         result = run_single_rule(rule)
         self.assertEqual(result.status, 'FAIL')
 
     def test_no_connection_returns_error(self):
-        rule = make_rule(min_rows=1)  # no connection
+        rule = make_rule(min_rows=1, user=self.user)  # no connection
         from .services import run_single_rule
         result = run_single_rule(rule)
         self.assertEqual(result.status, 'ERROR')
@@ -581,6 +603,9 @@ class RuleFormTest(TestCase):
 
 class ConnectionFormTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('conn_form_user', password='pass')
+
     def test_valid_form(self):
         from .forms import ConnectionForm
         form = ConnectionForm({
@@ -609,7 +634,9 @@ class ConnectionFormTest(TestCase):
             'database_url': 'postgresql://u:secret@host/db',
         })
         self.assertTrue(form.is_valid())
-        conn = form.save()
+        conn = form.save(commit=False)
+        conn.user = self.user
+        conn.save()
         self.assertEqual(conn.get_database_url(), 'postgresql://u:secret@host/db')
 
 
@@ -672,7 +699,7 @@ class DashboardViewTest(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_dashboard_shows_rule_name(self):
-        make_rule(name='my_special_rule', min_rows=1)
+        make_rule(name='my_special_rule', min_rows=1, user=self.user)
         r = self.client.get(reverse('monitor:dashboard'))
         self.assertContains(r, 'my_special_rule')
 
@@ -688,7 +715,7 @@ class DashboardViewTest(TestCase):
         self.assertEqual(r.context['total_count'], 0)
 
     def test_kpi_counts_correct(self):
-        run = make_run(ok=2, fail=1, error=1)
+        run = make_run(ok=2, fail=1, error=1, user=self.user)
         r = self.client.get(reverse('monitor:dashboard'))
         self.assertEqual(r.context['ok_count'], 2)
         self.assertEqual(r.context['fail_count'], 1)
@@ -712,7 +739,7 @@ class RuleCRUDViewTest(TestCase):
         self.assertContains(r, 'Save rule')
 
     def test_rule_create_post_volume(self):
-        conn = make_connection()
+        conn = make_connection(user=self.user)
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'new_rule', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 50, 'rule_type': 'volume_freshness',
@@ -722,7 +749,7 @@ class RuleCRUDViewTest(TestCase):
         self.assertTrue(Rule.objects.filter(name='new_rule').exists())
 
     def test_rule_create_post_custom_sql(self):
-        conn = make_connection()
+        conn = make_connection(user=self.user)
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'sql_rule', 'rule_type': 'custom_sql',
             'custom_sql': 'SELECT true',
@@ -741,14 +768,14 @@ class RuleCRUDViewTest(TestCase):
         self.assertFalse(Rule.objects.exists())
 
     def test_rule_edit_get(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         r = self.client.get(reverse('monitor:rule_edit', args=[rule.pk]))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, rule.name)
 
     def test_rule_edit_post(self):
-        conn = make_connection()
-        rule = make_rule(name='old_name', min_rows=1, connection=conn)
+        conn = make_connection(user=self.user)
+        rule = make_rule(name='old_name', min_rows=1, connection=conn, user=self.user)
         r = self.client.post(reverse('monitor:rule_edit', args=[rule.pk]), {
             'name': 'new_name', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 100, 'rule_type': 'volume_freshness',
@@ -760,24 +787,24 @@ class RuleCRUDViewTest(TestCase):
         self.assertEqual(rule.min_row_count, 100)
 
     def test_rule_delete_get(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         r = self.client.get(reverse('monitor:rule_delete', args=[rule.pk]))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'Delete rule')
 
     def test_rule_delete_post(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         r = self.client.post(reverse('monitor:rule_delete', args=[rule.pk]))
         self.assertRedirects(r, reverse('monitor:dashboard'))
         self.assertFalse(Rule.objects.filter(pk=rule.pk).exists())
 
     def test_rule_history_200(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
         self.assertEqual(r.status_code, 200)
 
     def test_rule_history_shows_results(self):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         run = CheckRun.objects.create(finished_at=timezone.now())
         RuleResult.objects.create(run=run, rule=rule, status='OK', row_count=5)
         r = self.client.get(reverse('monitor:rule_history', args=[rule.pk]))
@@ -813,7 +840,7 @@ class ConnectionCRUDViewTest(TestCase):
         self.assertTrue(Connection.objects.filter(name='staging').exists())
 
     def test_connection_edit_post(self):
-        conn = make_connection('old_name')
+        conn = make_connection('old_name', user=self.user)
         r = self.client.post(reverse('monitor:connection_edit', args=[conn.pk]), {
             'name': 'new_name',
             'provider': 'postgresql',
@@ -824,14 +851,14 @@ class ConnectionCRUDViewTest(TestCase):
         self.assertEqual(conn.name, 'new_name')
 
     def test_connection_delete_post(self):
-        conn = make_connection('to_delete')
+        conn = make_connection('to_delete', user=self.user)
         r = self.client.post(reverse('monitor:connection_delete', args=[conn.pk]))
         self.assertRedirects(r, reverse('monitor:connection_list'))
         self.assertFalse(Connection.objects.filter(pk=conn.pk).exists())
 
     def test_connection_delete_with_rules_falls_back_to_env(self):
-        conn = make_connection()
-        rule = make_rule(min_rows=1, connection=conn)
+        conn = make_connection(user=self.user)
+        rule = make_rule(min_rows=1, connection=conn, user=self.user)
         self.client.post(reverse('monitor:connection_delete', args=[conn.pk]))
         rule.refresh_from_db()
         self.assertIsNone(rule.connection)
@@ -855,7 +882,7 @@ class SchemaAPITest(TestCase):
         cursor.fetchall.return_value = [('public', 'orders'), ('public', 'users')]
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
+        conn = make_connection(user=self.user)
         r = self.client.get(f'/api/schema/{conn.pk}/tables/')
         self.assertEqual(r.status_code, 200)
         data = json.loads(r.content)
@@ -875,7 +902,7 @@ class SchemaAPITest(TestCase):
         ]
         mock_connect.return_value.cursor.return_value = cursor
 
-        conn = make_connection()
+        conn = make_connection(user=self.user)
         r = self.client.get(f'/api/schema/{conn.pk}/columns/public/orders/')
         self.assertEqual(r.status_code, 200)
         data = json.loads(r.content)
@@ -887,15 +914,13 @@ class SchemaAPITest(TestCase):
 
     def test_tables_endpoint_nonexistent_conn(self):
         r = self.client.get('/api/schema/99999/tables/')
-        self.assertEqual(r.status_code, 200)
-        data = json.loads(r.content)
-        self.assertIsNotNone(data['error'])
+        self.assertEqual(r.status_code, 404)
 
     @patch('monitor.services.psycopg2.connect')
     def test_tables_endpoint_conn_error(self, mock_connect):
         import psycopg2
         mock_connect.side_effect = psycopg2.OperationalError('refused')
-        conn = make_connection()
+        conn = make_connection(user=self.user)
         r = self.client.get(f'/api/schema/{conn.pk}/tables/')
         data = json.loads(r.content)
         self.assertIsNotNone(data['error'])
@@ -912,7 +937,7 @@ class RunChecksViewTest(TestCase):
         self.user = User.objects.create_user('admin', password='pass')
         self.client.login(username='admin', password='pass')
 
-    @patch('monitor.views.run_all_checks')
+    @patch('monitor.views.run_checks_for_user')
     def test_run_all_redirects_to_dashboard(self, mock_run):
         mock_run.return_value = MagicMock(ok_count=1, fail_count=0, error_count=0)
         r = self.client.post(reverse('monitor:run_checks'))
@@ -921,7 +946,7 @@ class RunChecksViewTest(TestCase):
 
     @patch('monitor.views.run_single_rule')
     def test_run_single_redirects(self, mock_run):
-        rule = make_rule(min_rows=1)
+        rule = make_rule(min_rows=1, user=self.user)
         mock_run.return_value = MagicMock(status='OK', error_message='')
         r = self.client.post(reverse('monitor:run_single', args=[rule.pk]))
         self.assertRedirects(r, reverse('monitor:dashboard'))
@@ -929,7 +954,7 @@ class RunChecksViewTest(TestCase):
 
     @patch('monitor.views.run_single_rule')
     def test_run_single_ok_flash_message(self, mock_run):
-        rule = make_rule(name='orders_check', min_rows=1)
+        rule = make_rule(name='orders_check', min_rows=1, user=self.user)
         mock_run.return_value = MagicMock(status='OK', error_message='')
         r = self.client.post(
             reverse('monitor:run_single', args=[rule.pk]),
@@ -940,7 +965,7 @@ class RunChecksViewTest(TestCase):
 
     @patch('monitor.views.run_single_rule')
     def test_run_single_fail_flash_message(self, mock_run):
-        rule = make_rule(name='orders_check', min_rows=1)
+        rule = make_rule(name='orders_check', min_rows=1, user=self.user)
         mock_run.return_value = MagicMock(status='FAIL', error_message='')
         r = self.client.post(
             reverse('monitor:run_single', args=[rule.pk]),
@@ -960,12 +985,15 @@ class RunChecksViewTest(TestCase):
 
 class RunScheduledCommandTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('scheduled_user', password='pass')
+
     @patch('monitor.management.commands.run_scheduled.run_single_rule')
     @patch('monitor.management.commands.run_scheduled.timezone')
     def test_runs_rules_matching_current_time(self, mock_tz, mock_run):
         from datetime import datetime, timezone as utc
         mock_tz.now.return_value = datetime(2025, 1, 1, 8, 0, tzinfo=utc.utc)
-        rule = make_rule(name='scheduled', min_rows=1)
+        rule = make_rule(name='scheduled', min_rows=1, user=self.user)
         rule.schedule_type = 'preset_1x'  # cron: 0 8 * * *
         rule.save()
 
@@ -984,7 +1012,7 @@ class RunScheduledCommandTest(TestCase):
     def test_skips_rules_with_different_time(self, mock_tz, mock_run):
         from datetime import datetime, timezone as utc
         mock_tz.now.return_value = datetime(2025, 1, 1, 9, 0, tzinfo=utc.utc)
-        rule = make_rule(name='not_now', min_rows=1)
+        rule = make_rule(name='not_now', min_rows=1, user=self.user)
         rule.schedule_type = 'preset_1x'  # cron: 0 8 * * * — does not match 09:00
         rule.save()
 
@@ -1001,7 +1029,7 @@ class RunScheduledCommandTest(TestCase):
     def test_disabled_rule_is_skipped(self, mock_tz, mock_run):
         from datetime import datetime, timezone as utc
         mock_tz.now.return_value = datetime(2025, 1, 1, 8, 0, tzinfo=utc.utc)
-        rule = make_rule(name='disabled_rule', min_rows=1)
+        rule = make_rule(name='disabled_rule', min_rows=1, user=self.user)
         rule.schedule_type = 'disabled'
         rule.save()
 
@@ -1018,7 +1046,7 @@ class RunScheduledCommandTest(TestCase):
     def test_custom_cron_rule_fires(self, mock_tz, mock_run):
         from datetime import datetime, timezone as utc
         mock_tz.now.return_value = datetime(2025, 1, 1, 14, 30, tzinfo=utc.utc)
-        rule = make_rule(name='custom_rule', min_rows=1)
+        rule = make_rule(name='custom_rule', min_rows=1, user=self.user)
         rule.schedule_type = 'custom_cron'
         rule.schedule_cron = '30 14 * * *'
         rule.save()
@@ -1040,9 +1068,12 @@ class RunScheduledCommandTest(TestCase):
 
 class RuleFormScheduleTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('sched_form_user', password='pass')
+
     def _base_data(self, **overrides):
         """Minimal valid form data for a volume rule."""
-        conn = Connection.objects.create(name='sched-conn')
+        conn = Connection.objects.create(name='sched-conn', user=self.user)
         conn.set_database_url('postgresql://user:pass@host/db')
         conn.save()
         data = {
@@ -1110,8 +1141,8 @@ class SlackNotificationModelTest(TestCase):
 #  MySQL helper
 # ═══════════════════════════════════════════════════════════════════
 
-def make_mysql_connection(name='test_mysql', url='mysql+pymysql://user:pass@host/db'):
-    conn = Connection(name=name, provider='mysql')
+def make_mysql_connection(name='test_mysql', url='mysql+pymysql://user:pass@host/db', user=None):
+    conn = Connection(name=name, provider='mysql', user=user)
     conn.set_database_url(url)
     conn.save()
     return conn
@@ -1123,12 +1154,15 @@ def make_mysql_connection(name='test_mysql', url='mysql+pymysql://user:pass@host
 
 class ConnectionProviderModelTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('provider_model_user', password='pass')
+
     def test_default_provider_is_postgresql(self):
-        conn = make_connection(name='pg_default')
+        conn = make_connection(name='pg_default', user=self.user)
         self.assertEqual(conn.provider, 'postgresql')
 
     def test_mysql_provider_saved(self):
-        conn = make_mysql_connection(name='mysql_conn')
+        conn = make_mysql_connection(name='mysql_conn', user=self.user)
         self.assertEqual(conn.provider, 'mysql')
 
     def test_provider_choices(self):
@@ -1138,9 +1172,9 @@ class ConnectionProviderModelTest(TestCase):
         self.assertIn('mysql', choices)
 
     def test_str_includes_provider(self):
-        conn = make_connection(name='prod')
+        conn = make_connection(name='prod', user=self.user)
         self.assertIn('PostgreSQL', str(conn))
-        mysql_conn = make_mysql_connection(name='mysql_prod')
+        mysql_conn = make_mysql_connection(name='mysql_prod', user=self.user)
         self.assertIn('MySQL', str(mysql_conn))
 
 
@@ -1192,6 +1226,9 @@ class OpenConnDispatchTest(TestCase):
 
 class CustomSqlMySQLTest(TestCase):
 
+    def setUp(self):
+        self.user = User.objects.create_user('custom_sql_mysql_user', password='pass')
+
     def _mock_conn(self, fetchone_return=(True,)):
         conn = MagicMock()
         cursor = MagicMock()
@@ -1203,7 +1240,7 @@ class CustomSqlMySQLTest(TestCase):
 
     def test_mysql_uses_session_max_execution_time(self):
         from .services import _check_custom_sql
-        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1')
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1', user=self.user)
         conn, cursor = self._mock_conn((1,))
         _check_custom_sql(conn, rule, 'mysql')
         first_call = cursor.execute.call_args_list[0]
@@ -1212,7 +1249,7 @@ class CustomSqlMySQLTest(TestCase):
 
     def test_postgresql_uses_statement_timeout(self):
         from .services import _check_custom_sql
-        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1')
+        rule = make_rule(rule_type='custom_sql', custom_sql='SELECT 1', user=self.user)
         conn, cursor = self._mock_conn((1,))
         _check_custom_sql(conn, rule, 'postgresql')
         first_call = cursor.execute.call_args_list[0]
@@ -1225,6 +1262,9 @@ class CustomSqlMySQLTest(TestCase):
 # ═══════════════════════════════════════════════════════════════════
 
 class VolumeFreshnessMySQLTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('vol_mysql_user', password='pass')
 
     def _mock_conn(self, side_effect=None, fetchone_return=None):
         conn = MagicMock()
@@ -1240,7 +1280,7 @@ class VolumeFreshnessMySQLTest(TestCase):
 
     def test_mysql_uses_timestampdiff(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=24)
+        rule = make_rule(ts_col='created_at', max_age=24, user=self.user)
         conn, cursor = self._mock_conn(fetchone_return=(2.0,))
         _check_volume_freshness(conn, rule, 'mysql')
         # Find the freshness SQL call
@@ -1251,7 +1291,7 @@ class VolumeFreshnessMySQLTest(TestCase):
 
     def test_postgresql_uses_extract_epoch(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=24)
+        rule = make_rule(ts_col='created_at', max_age=24, user=self.user)
         conn, cursor = self._mock_conn(fetchone_return=(2.0,))
         _check_volume_freshness(conn, rule, 'postgresql')
         calls = [str(c) for c in cursor.execute.call_args_list]
@@ -1260,7 +1300,7 @@ class VolumeFreshnessMySQLTest(TestCase):
 
     def test_mysql_freshness_ok(self):
         from .services import _check_volume_freshness
-        rule = make_rule(ts_col='created_at', max_age=24)
+        rule = make_rule(ts_col='created_at', max_age=24, user=self.user)
         conn, cursor = self._mock_conn(fetchone_return=(2.0,))
         result = _check_volume_freshness(conn, rule, 'mysql')
         self.assertEqual(result['status'], 'OK')
@@ -1274,7 +1314,8 @@ class VolumeFreshnessMySQLTest(TestCase):
 class GetSchemaTablesMySQLTest(TestCase):
 
     def setUp(self):
-        self.mysql_conn = make_mysql_connection(name='mysql_tables_test')
+        self.user = User.objects.create_user('schema_tables_user', password='pass')
+        self.mysql_conn = make_mysql_connection(name='mysql_tables_test', user=self.user)
 
     @patch('monitor.services._open_conn')
     def test_mysql_excludes_system_schemas(self, mock_open):
@@ -1296,7 +1337,7 @@ class GetSchemaTablesMySQLTest(TestCase):
     @patch('monitor.services._open_conn')
     def test_postgresql_excludes_pg_catalog(self, mock_open):
         from .services import get_schema_tables
-        pg_conn = make_connection(name='pg_tables_test')
+        pg_conn = make_connection(name='pg_tables_test', user=self.user)
         cursor = MagicMock()
         cursor.__enter__ = MagicMock(return_value=cursor)
         cursor.__exit__ = MagicMock(return_value=False)
@@ -1318,7 +1359,8 @@ class GetSchemaTablesMySQLTest(TestCase):
 class GetSchemaColumnsMySQLTest(TestCase):
 
     def setUp(self):
-        self.mysql_conn = make_mysql_connection(name='mysql_cols_test')
+        self.user = User.objects.create_user('schema_cols_user', password='pass')
+        self.mysql_conn = make_mysql_connection(name='mysql_cols_test', user=self.user)
 
     @patch('monitor.services._open_conn')
     def test_datetime_column_is_timestamp_true(self, mock_open):
@@ -1375,4 +1417,114 @@ class ConnectionCreateProviderPreSelectTest(TestCase):
         r = self.client.get(reverse('monitor:connection_create'))
         self.assertEqual(r.status_code, 200)
         self.assertNotIn('provider', r.context['form'].initial)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Multi-tenancy — Phase 4 new tests
+# ═══════════════════════════════════════════════════════════════
+
+class SignupViewTest(TestCase):
+    """Tests for the public /signup/ registration view."""
+
+    def test_signup_get_200(self):
+        r = self.client.get('/signup/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_signup_post_valid_creates_user(self):
+        r = self.client.post('/signup/', {
+            'username': 'newuser',
+            'password1': 'Str0ngP@ssw0rd!',
+            'password2': 'Str0ngP@ssw0rd!',
+        })
+        self.assertRedirects(r, '/', fetch_redirect_response=False)
+        self.assertTrue(User.objects.filter(username='newuser').exists())
+
+    def test_signup_post_invalid_shows_form(self):
+        r = self.client.post('/signup/', {
+            'username': 'newuser',
+            'password1': 'password123',
+            'password2': 'differentpassword',
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(User.objects.filter(username='newuser').exists())
+
+    def test_signup_redirects_authenticated_user(self):
+        User.objects.create_user('existinguser', password='pass')
+        self.client.login(username='existinguser', password='pass')
+        r = self.client.get('/signup/')
+        self.assertRedirects(r, reverse('monitor:dashboard'), fetch_redirect_response=False)
+
+    def test_signup_page_not_accessible_with_bad_data(self):
+        """Missing username should keep form invalid, User count unchanged."""
+        r = self.client.post('/signup/', {
+            'username': '',
+            'password1': 'Str0ngP@ssw0rd!',
+            'password2': 'Str0ngP@ssw0rd!',
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(User.objects.exists())
+
+
+class PasswordResetURLTest(TestCase):
+    """Smoke tests that password reset URLs are wired and return 200."""
+
+    def test_password_reset_form_200(self):
+        r = self.client.get('/password-reset/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_password_reset_done_200(self):
+        r = self.client.get('/password-reset/done/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_password_reset_complete_200(self):
+        r = self.client.get('/password-reset/complete/')
+        self.assertEqual(r.status_code, 200)
+
+
+class PerUserIsolationTest(TestCase):
+    """Assert that user A cannot access, edit, or delete user B's data (IDOR closure)."""
+
+    def setUp(self):
+        self.user_a = User.objects.create_user('user_a', password='pass')
+        self.user_b = User.objects.create_user('user_b', password='pass')
+        self.b_conn = make_connection(name='b_conn', user=self.user_b)
+        self.b_rule = make_rule(name='b_rule', min_rows=1,
+                                connection=self.b_conn, user=self.user_b)
+        self.client.login(username='user_a', password='pass')
+
+    def test_dashboard_hides_other_user_rule(self):
+        r = self.client.get(reverse('monitor:dashboard'))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'b_rule')
+
+    def test_rule_edit_other_user_404(self):
+        r = self.client.get(reverse('monitor:rule_edit', args=[self.b_rule.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_rule_delete_other_user_404(self):
+        r = self.client.post(reverse('monitor:rule_delete', args=[self.b_rule.pk]))
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(Rule.objects.filter(pk=self.b_rule.pk).exists())
+
+    def test_rule_history_other_user_404(self):
+        r = self.client.get(reverse('monitor:rule_history', args=[self.b_rule.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_connection_list_hides_other_user(self):
+        r = self.client.get(reverse('monitor:connection_list'))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'b_conn')
+
+    def test_connection_edit_other_user_404(self):
+        r = self.client.get(reverse('monitor:connection_edit', args=[self.b_conn.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_connection_delete_other_user_404(self):
+        r = self.client.post(reverse('monitor:connection_delete', args=[self.b_conn.pk]))
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(Connection.objects.filter(pk=self.b_conn.pk).exists())
+
+    def test_api_schema_tables_other_user_404(self):
+        r = self.client.get(f'/api/schema/{self.b_conn.pk}/tables/')
+        self.assertEqual(r.status_code, 404)
 

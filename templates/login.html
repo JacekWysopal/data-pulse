@@ -260,7 +260,12 @@
     </form>
   </div>
 
-  <div class="login-footer">DataPulse · Data Quality Monitor</div>
+  <div class="login-footer">
+    Don’t have an account? <a href="{% url 'signup' %}" style="color:var(--accent-hover);text-decoration:none;">Sign up</a>
+    &nbsp;&middot;&nbsp;
+    <a href="{% url 'password_reset' %}" style="color:var(--text-muted);text-decoration:none;">Forgot password?</a>
+  </div>
+
 </div>
 </body>
 </html>

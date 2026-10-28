@@ -7,7 +7,7 @@ def migrate_schedule_time_to_cron(apps, schema_editor):
     to_update = []
     for rule in Rule.objects.filter(schedule_time__isnull=False):
         rule.schedule_type = 'custom_cron'
-        rule.schedule_cron = f'0 {rule.schedule_time.hour} * * *'
+        rule.schedule_cron = f'{rule.schedule_time.minute} {rule.schedule_time.hour} * * *'
         to_update.append(rule)
     if to_update:
         Rule.objects.bulk_update(to_update, ['schedule_type', 'schedule_cron'])

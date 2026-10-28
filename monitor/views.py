@@ -1,20 +1,40 @@
 import json
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from .forms import ConnectionForm, RuleForm
 from .models import CheckRun, Connection, Rule, RuleResult
-from .services import get_schema_columns, get_schema_tables, run_all_checks, run_single_rule
+from .services import get_schema_columns, get_schema_tables, run_all_checks, run_checks_for_user, run_single_rule
+
+
+# ── Authentication ──────────────────────────────────────────
+
+def signup(request):
+    """Public signup view — no @login_required."""
+    if request.user.is_authenticated:
+        return redirect('monitor:dashboard')
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect(settings.LOGIN_REDIRECT_URL)
+    else:
+        form = UserCreationForm()
+    return render(request, 'signup.html', {'form': form})
 
 
 # ── Dashboard ────────────────────────────────────────────────
 
 @login_required
 def dashboard(request):
-    rules = Rule.objects.select_related('connection').prefetch_related('results').all()
+    rules = Rule.objects.select_related('connection').prefetch_related('results').filter(user=request.user)
     last_run = CheckRun.objects.first()
 
     ok_count = fail_count = error_count = never_count = 0
@@ -46,7 +66,7 @@ def dashboard(request):
 @login_required
 def run_checks(request):
     if request.method == 'POST':
-        run_all_checks()
+        run_checks_for_user(request.user)
     return redirect('monitor:dashboard')
 
 
@@ -54,7 +74,7 @@ def run_checks(request):
 
 @login_required
 def run_single(request, rule_id):
-    rule = get_object_or_404(Rule, pk=rule_id)
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
     if request.method == 'POST':
         result = run_single_rule(rule)
         if result.status == 'OK':
@@ -68,7 +88,7 @@ def run_single(request, rule_id):
 
 @login_required
 def rule_history(request, rule_id):
-    rule = get_object_or_404(Rule, pk=rule_id)
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
     results = rule.results.select_related('run').order_by('-checked_at')[:20]
     return render(request, 'monitor/rule_history.html', {'rule': rule, 'results': results})
 
@@ -76,33 +96,35 @@ def rule_history(request, rule_id):
 @login_required
 def rule_create(request):
     if request.method == 'POST':
-        form = RuleForm(request.POST)
+        form = RuleForm(request.POST, user=request.user)
         if form.is_valid():
-            form.save()
+            rule = form.save(commit=False)
+            rule.user = request.user
+            rule.save()
             messages.success(request, 'Rule added.')
             return redirect('monitor:dashboard')
     else:
-        form = RuleForm()
+        form = RuleForm(user=request.user)
     return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Add rule'})
 
 
 @login_required
 def rule_edit(request, rule_id):
-    rule = get_object_or_404(Rule, pk=rule_id)
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
     if request.method == 'POST':
-        form = RuleForm(request.POST, instance=rule)
+        form = RuleForm(request.POST, instance=rule, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, 'Rule updated.')
             return redirect('monitor:dashboard')
     else:
-        form = RuleForm(instance=rule)
+        form = RuleForm(instance=rule, user=request.user)
     return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Edit rule', 'rule': rule})
 
 
 @login_required
 def rule_delete(request, rule_id):
-    rule = get_object_or_404(Rule, pk=rule_id)
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
     if request.method == 'POST':
         name = str(rule)
         rule.delete()
@@ -121,6 +143,8 @@ CACHE_KEY_COLUMNS = 'dp_schema_cols_{}_{}_{}'  # conn_id, schema, table
 @require_GET
 def api_schema_tables(request, conn_id):
     """AJAX: list tables for a connection. Session-cached 5 min."""
+    # Verify ownership before accessing the connection
+    get_object_or_404(Connection, pk=conn_id, user=request.user)
     cache_key = CACHE_KEY_TABLES.format(conn_id)
     cached = request.session.get(cache_key)
     if cached:
@@ -135,6 +159,8 @@ def api_schema_tables(request, conn_id):
 @require_GET
 def api_schema_columns(request, conn_id, schema, table):
     """AJAX: list columns for schema.table. Session-cached 5 min."""
+    # Verify ownership before accessing the connection
+    get_object_or_404(Connection, pk=conn_id, user=request.user)
     cache_key = CACHE_KEY_COLUMNS.format(conn_id, schema, table)
     cached = request.session.get(cache_key)
     if cached:
@@ -149,7 +175,7 @@ def api_schema_columns(request, conn_id, schema, table):
 
 @login_required
 def connection_list(request):
-    connections = Connection.objects.prefetch_related('rules').all()
+    connections = Connection.objects.prefetch_related('rules').filter(user=request.user)
     return render(request, 'monitor/connection_list.html', {'connections': connections})
 
 
@@ -158,7 +184,9 @@ def connection_create(request):
     if request.method == 'POST':
         form = ConnectionForm(request.POST)
         if form.is_valid():
-            form.save()
+            conn = form.save(commit=False)
+            conn.user = request.user
+            conn.save()
             messages.success(request, 'Connection added.')
             return redirect('monitor:connection_list')
     else:
@@ -172,7 +200,7 @@ def connection_create(request):
 
 @login_required
 def connection_edit(request, conn_id):
-    conn = get_object_or_404(Connection, pk=conn_id)
+    conn = get_object_or_404(Connection, pk=conn_id, user=request.user)
     if request.method == 'POST':
         form = ConnectionForm(request.POST, instance=conn)
         if form.is_valid():
@@ -186,7 +214,7 @@ def connection_edit(request, conn_id):
 
 @login_required
 def connection_delete(request, conn_id):
-    conn = get_object_or_404(Connection, pk=conn_id)
+    conn = get_object_or_404(Connection, pk=conn_id, user=request.user)
     if request.method == 'POST':
         name = conn.name
         conn.delete()

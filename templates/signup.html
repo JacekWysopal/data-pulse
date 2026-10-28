@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DataPulse — Sign up</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236366f1'/><path d='M6 22 L11 14 L16 17 L21 9 L26 12' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/><circle cx='26' cy='12' r='2.5' fill='white'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #0a0a0f;
+      --bg-card:       #16161f;
+      --bg-input:      #13131a;
+      --border:        rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.12);
+      --border-focus:  rgba(99,102,241,0.6);
+      --accent:        #6366f1;
+      --accent-hover:  #818cf8;
+      --accent-dim:    rgba(99,102,241,0.15);
+      --accent-glow:   rgba(99,102,241,0.3);
+      --text-primary:  #f1f5f9;
+      --text-secondary:#94a3b8;
+      --text-muted:    #4b5563;
+      --fail:          #f87171;
+      --fail-dim:      rgba(248,113,113,0.1);
+      --radius:        10px;
+      --radius-lg:     14px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ambient glow */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(99,102,241,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 20% 100%, rgba(99,102,241,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* Grid lines */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .login-wrap {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      padding: 1.5rem;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Logo */
+    .login-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 2rem;
+    }
+
+    .login-logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 24px rgba(99,102,241,0.5);
+    }
+
+    .login-logo-icon svg { width: 22px; height: 22px; }
+
+    .login-logo-name {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .login-logo-name span {
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Card */
+    .login-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1);
+    }
+
+    .login-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.3px;
+    }
+
+    .login-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 1.75rem;
+    }
+
+    /* Form */
+    .field-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.4rem;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-strong);
+      color: var(--text-primary);
+      border-radius: var(--radius);
+      font-size: 0.88rem;
+      padding: 0.6rem 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    input::placeholder { color: var(--text-muted); }
+
+    /* Errors */
+    .field-errors {
+      color: var(--fail);
+      font-size: 0.76rem;
+      margin-top: 0.3rem;
+    }
+
+    .field-errors li { list-style: none; }
+
+    .login-error {
+      background: var(--fail-dim);
+      border: 1px solid rgba(248,113,113,0.2);
+      color: var(--fail);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.9rem;
+      font-size: 0.82rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Help text */
+    .field-help {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    /* Submit */
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      border: none;
+      color: #fff;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 0.65rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      letter-spacing: 0.01em;
+      margin-top: 0.5rem;
+      transition: opacity 0.15s, box-shadow 0.15s, transform 0.1s;
+    }
+
+    .btn-login:hover {
+      opacity: 0.92;
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+
+    .btn-login:active { transform: scale(0.98); }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .login-footer a {
+      color: var(--accent-hover);
+      text-decoration: none;
+    }
+
+    .login-footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+
+  <div class="login-logo">
+    <div class="login-logo-icon">
+      <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 15 L7 9 L11 12 L15 5 L19 8" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="19" cy="8" r="2" fill="white"/>
+      </svg>
+    </div>
+    <div class="login-logo-name">Data<span>Pulse</span></div>
+  </div>
+
+  <div class="login-card">
+    <div class="login-title">Create your account</div>
+    <div class="login-sub">PostgreSQL data quality monitoring</div>
+
+    <form method="post" action="{% url 'signup' %}">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <ul class="field-errors">
+              {% for error in field.errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if field.help_text %}
+            <div class="field-help">{{ field.help_text }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if form.non_field_errors %}
+        <div class="login-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <button type="submit" class="btn-login">Create account →</button>
+    </form>
+  </div>
+
+  <div class="login-footer">
+    Already have an account? <a href="{% url 'login' %}">Sign in</a>
+  </div>
+
+</div>
+</body>
+</html>

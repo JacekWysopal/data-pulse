@@ -149,6 +149,23 @@ def get_schema_columns(conn_id: int, schema: str, table: str) -> dict:
         conn.close()
 
 
+def _mysql_ansi_quotes_enabled(conn) -> bool:
+    """Return True if the MySQL connection has ANSI_QUOTES in its sql_mode.
+
+    When ANSI_QUOTES is active, double-quote characters act as identifier
+    quotes rather than string-literal delimiters. DataPulse uses backtick
+    quoting (see _check_volume_freshness) which works regardless of this
+    mode, but callers can use this function to detect non-standard setups.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SELECT @@sql_mode')
+            (sql_mode,) = cur.fetchone()
+            return 'ANSI_QUOTES' in (sql_mode or '').upper()
+    except Exception:
+        return False
+
+
 def _check_rule(conn, rule: Rule, provider: str = 'postgresql') -> dict:
     """Dispatch to the correct check based on rule type."""
     if rule.rule_type == Rule.RuleType.CUSTOM_SQL:
@@ -191,9 +208,9 @@ def _check_custom_sql(conn, rule: Rule, provider: str = 'postgresql') -> dict:
     try:
         with conn.cursor() as cur:
             timeout_sql = (
-                'SET statement_timeout = 30000'
+                "SET LOCAL statement_timeout='30s'"
                 if provider == 'postgresql'
-                else 'SET SESSION max_execution_time = 30000'
+                else 'SET SESSION max_execution_time=30000'
             )
             cur.execute(timeout_sql)
             cur.execute(sql)
@@ -228,9 +245,14 @@ def _check_volume_freshness(conn, rule: Rule, provider: str = 'postgresql') -> d
         'error_message': '',
     }
 
+    # MySQL default sql_mode does NOT include ANSI_QUOTES, so double-quote
+    # characters are string literals, not identifier quotes. Use backticks for
+    # MySQL; keep ANSI double-quote style for PostgreSQL.
+    q = '`' if provider == 'mysql' else '"'
+
     try:
         with conn.cursor() as cur:
-            table = f'"{rule.schema_name}"."{rule.table_name}"'
+            table = f'{q}{rule.schema_name}{q}.{q}{rule.table_name}{q}'
 
             if rule.min_row_count is not None:
                 cur.execute(f'SELECT COUNT(*) FROM {table}')  # noqa: S608
@@ -240,7 +262,7 @@ def _check_volume_freshness(conn, rule: Rule, provider: str = 'postgresql') -> d
                     result['status'] = RuleResult.Status.FAIL
 
             if rule.timestamp_column and rule.max_age_hours is not None:
-                col = f'"{rule.timestamp_column}"'
+                col = f'{q}{rule.timestamp_column}{q}'
                 if provider == 'postgresql':
                     freshness_sql = (
                         f'SELECT EXTRACT(EPOCH FROM (NOW() - MAX({col}))) / 3600 FROM {table}'  # noqa: S608
@@ -310,6 +332,82 @@ def run_single_rule(rule: Rule) -> RuleResult:
     run.finished_at = timezone.now()
     run.save()
     return result
+
+
+def run_checks_for_user(user) -> CheckRun:
+    """Run all checks for rules owned by a specific user.
+
+    Used by the UI-triggered run_checks view so that pressing 'Run Checks'
+    only executes rules belonging to the logged-in user.  The cron management
+    command (run_scheduled) continues to call run_all_checks() which is
+    intentionally unscoped.
+    """
+    run = CheckRun.objects.create()
+    rules = Rule.objects.filter(user=user).select_related('connection')
+
+    conn_cache: dict[str, tuple] = {}
+
+    for rule in rules:
+        try:
+            if not rule.connection_id:
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message='No connection assigned. Add a Connection and assign it to this rule.',
+                )
+                continue
+
+            url = rule.connection.get_database_url()
+            provider = rule.connection.provider
+            if not url:
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message='Connection URL is empty.',
+                )
+                continue
+
+            if url not in conn_cache:
+                try:
+                    conn_cache[url] = (_open_conn(url, provider), None, provider)
+                except MonitoredDbError as e:
+                    conn_cache[url] = (None, str(e), provider)
+
+            conn, conn_error, provider = conn_cache[url]
+
+            if conn_error or conn is None:
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=RuleResult.Status.ERROR,
+                    error_message=conn_error or 'Connection failed.',
+                )
+            else:
+                result = _check_rule(conn, rule, provider)
+                RuleResult.objects.create(
+                    run=run, rule=rule,
+                    status=result['status'],
+                    row_count=result['row_count'],
+                    last_record_age_hours=result['last_record_age_hours'],
+                    error_message=result['error_message'],
+                )
+
+        except Exception as e:
+            RuleResult.objects.create(
+                run=run, rule=rule,
+                status=RuleResult.Status.ERROR,
+                error_message=str(e),
+            )
+
+    for conn, conn_error, provider in conn_cache.values():
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    run.finished_at = timezone.now()
+    run.save()
+    return run
 
 
 def run_all_checks() -> CheckRun:

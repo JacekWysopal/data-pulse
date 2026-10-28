@@ -59,9 +59,12 @@ class RuleForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         self.fields['connection'].required = True
         self.fields['connection'].empty_label = '— Select a connection —'
+        if user is not None:
+            self.fields['connection'].queryset = Connection.objects.filter(user=user)
         self.fields['schedule_cron'].required = False
         self.fields['schedule_type'].required = False
         self.fields['schedule_type'].initial = 'disabled'

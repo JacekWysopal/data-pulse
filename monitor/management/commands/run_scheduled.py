@@ -34,7 +34,14 @@ class Command(BaseCommand):
                     f'Rule {rule.id} has schedule_type=custom_cron but schedule_cron is blank — skipping'
                 )
                 continue
-            if croniter.match(cron_str, now):
+            try:
+                matched = croniter.match(cron_str, now)
+            except (ValueError, TypeError) as exc:
+                self.stderr.write(
+                    f'Rule {rule.id} has invalid cron expression "{cron_str}" — skipping ({exc})'
+                )
+                continue
+            if matched:
                 result = run_single_rule(rule)
                 self.stdout.write(f'  [{result.status}] {rule.name}')
                 fired += 1

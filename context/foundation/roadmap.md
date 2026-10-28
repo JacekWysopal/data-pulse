@@ -325,9 +325,9 @@ Slack jako „Soon” w UI.
 |---|---|---|---|
 | S-12 | Multi-tenancy — konta użytkowników, reguły per osoba ⭐ | — | planning |
 | S-13 | Email notifications — alert na FAIL | S-12 | planning |
-| S-14 | MySQL support — MySQL jako monitored DB provider | — | planning |
-| S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | planning |
-| S-16 | Slack notifications — Soon badge w UI + model stub | — | planning |
+| S-14 | MySQL support — MySQL jako monitored DB provider | — | implemented |
+| S-15 | Advanced scheduler — 3x dziennie, cron-style opcje | — | implemented |
+| S-16 | Slack notifications — Soon badge w UI + model stub | — | implemented |
 
 ---
 
@@ -377,13 +377,7 @@ Reguły volume i freshness działają na MySQL tak samo jak na PostgreSQL.
 
 **Prereqs:** — (niezależny od multi-tenancy)
 
-**Free MySQL do testów:**
-- PlanetScale — free tier 5GB, MySQL-compatible
-- Railway — free tier $5 kredyt/miesiąc
-- Aiven — 30-dniowy trial
-- db4free.net — prosty free MySQL hosting
-
-**Status:** planning
+**Status:** implemented
 
 ---
 
@@ -415,4 +409,4 @@ Model SlackNotification istnieje w bazie (gotowy do aktywacji).
 
 **Prereqs:** — (UI only + model stub)
 
-**Status:** planning
+**Status:** implemented

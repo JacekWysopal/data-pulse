@@ -25,12 +25,17 @@ class Connection(models.Model):
         POSTGRESQL = 'postgresql', 'PostgreSQL'
         MYSQL      = 'mysql',      'MySQL'
 
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200)
     description = models.CharField(max_length=500, blank=True)
     provider = models.CharField(
         max_length=20,
         choices=Provider.choices,
         default=Provider.POSTGRESQL,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='connections',
     )
     _database_url = models.TextField(db_column='database_url')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,6 +43,7 @@ class Connection(models.Model):
 
     class Meta:
         ordering = ['name']
+        unique_together = [('user', 'name')]
 
     def __str__(self):
         return f'{self.name} ({self.get_provider_display()})'
@@ -84,6 +90,11 @@ class Rule(models.Model):
     schema_name = models.CharField(max_length=100, blank=True, verbose_name='Schema')
     table_name  = models.CharField(max_length=100, blank=True, verbose_name='Table')
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='rules',
+    )
     connection = models.ForeignKey(
         Connection,
         on_delete=models.SET_NULL,
