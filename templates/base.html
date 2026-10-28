@@ -614,6 +614,19 @@
         <span class="dp-nav-label">Add rule</span>
       </a>
 
+      <a href="{% url 'monitor:schedule_dashboard' %}"
+         class="dp-nav-item {% if request.resolver_match.url_name == 'schedule_dashboard' %}active{% endif %}"
+         data-tip="Schedule">
+        <span class="dp-nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 5v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="dp-nav-label">Schedule</span>
+      </a>
+
       <div class="dp-nav-section">Data</div>
 
       <a href="{% url 'monitor:connection_list' %}"

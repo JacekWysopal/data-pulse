@@ -6,10 +6,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from .forms import ConnectionForm, RuleForm
 from .models import CheckRun, Connection, Rule, RuleResult
+from .schedule_utils import get_next_run
 from .services import get_schema_columns, get_schema_tables, run_all_checks, run_checks_for_user, run_single_rule
 
 
@@ -169,6 +170,47 @@ def api_schema_columns(request, conn_id, schema, table):
     if not result['error']:
         request.session[cache_key] = result
     return JsonResponse(result)
+
+
+# ── Schedule ─────────────────────────────────────────────────
+
+@login_required
+def schedule_dashboard(request):
+    """Show all scheduled rules with next-run time, last result, and toggle."""
+    from django.utils import timezone
+    now = timezone.now()
+    rules = (
+        Rule.objects
+        .select_related('connection')
+        .prefetch_related('results')
+        .filter(user=request.user)
+        .exclude(schedule_type='disabled')
+    )
+    rule_rows = []
+    for rule in rules:
+        next_run = get_next_run(rule)
+        rule_rows.append({
+            'rule': rule,
+            'next_run': next_run,
+            'last_result': rule.last_result,
+        })
+    return render(request, 'monitor/schedule_dashboard.html', {
+        'rule_rows': rule_rows,
+        'now': now,
+    })
+
+
+@login_required
+@require_POST
+def toggle_schedule(request, rule_id):
+    """POST-only: toggle a rule between disabled and preset_1x."""
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
+    if rule.schedule_type == 'disabled':
+        rule.schedule_type = 'preset_1x'
+    else:
+        rule.schedule_type = 'disabled'
+    rule.save(update_fields=['schedule_type'])
+    return redirect('monitor:schedule_dashboard')
 
 
 # ── Connections ───────────────────────────────────────────────
