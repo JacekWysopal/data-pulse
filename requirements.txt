@@ -2,9 +2,11 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 asgiref==3.12.1
     # via django
+cryptography==44.0.3
+    # via data-pulse (pyproject.toml) — Fernet encryption for Connection.database_url
 dj-database-url==3.1.2
     # via data-pulse (pyproject.toml)
-django==6.1.1
+django==6.1.2
     # via
     #   data-pulse (pyproject.toml)
     #   dj-database-url

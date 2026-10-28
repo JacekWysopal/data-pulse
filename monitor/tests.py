@@ -633,6 +633,26 @@ class AuthRedirectTest(TestCase):
         r = self.client.get('/api/schema/1/tables/')
         self.assertEqual(r.status_code, 302)
 
+    def test_login_page_200(self):
+        r = self.client.get('/login/')
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Sign in')
+
+    def test_login_success_redirects_to_dashboard(self):
+        User.objects.create_user('admin', password='pass')
+        r = self.client.post('/login/', {'username': 'admin', 'password': 'pass'})
+        self.assertRedirects(r, '/', fetch_redirect_response=False)
+
+    def test_login_failure_shows_error(self):
+        r = self.client.post('/login/', {'username': 'bad', 'password': 'wrong'})
+        self.assertEqual(r.status_code, 200)
+
+    def test_logout_redirects_to_login(self):
+        User.objects.create_user('admin', password='pass')
+        self.client.login(username='admin', password='pass')
+        r = self.client.post('/logout/')
+        self.assertRedirects(r, '/login/', fetch_redirect_response=False)
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  Views — dashboard
