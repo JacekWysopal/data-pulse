@@ -115,7 +115,7 @@ def rule_create(request):
             return redirect('monitor:dashboard')
     else:
         form = RuleForm(user=request.user)
-    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Add rule', 'wizard_mode': True})
+    return render(request, 'monitor/rule_form.html', {'form': form, 'action': 'Add rule'})
 
 
 @login_required
