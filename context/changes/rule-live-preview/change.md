@@ -1,7 +1,7 @@
 ---
 change_id: rule-live-preview
 title: Live preview — test rule query before saving
-status: preparing
+status: implemented
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null

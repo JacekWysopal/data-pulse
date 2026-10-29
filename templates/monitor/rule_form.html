@@ -4,7 +4,7 @@
 {% block extra_head %}
 <style>
   .form-card {
-    max-width: 580px;
+    max-width: {% if wizard_mode %}640px{% else %}580px{% endif %};
     background: var(--bg-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -177,6 +177,92 @@
     width: 100%;
     margin-bottom: 6px;
   }
+
+{% if wizard_mode %}
+  /* ── Wizard styles (phases 1-4) ─────────────────────────────── */
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+
+  /* Progress bar */
+  .wizard-progress {
+    display: flex;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+  .wizard-step-ind {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .wizard-step-ind .circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    background: var(--bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+  .wizard-step-ind .step-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 90px;
+    line-height: 1.3;
+    transition: color 0.2s;
+  }
+  .wizard-step-ind.active .circle {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .wizard-step-ind.active .step-label {
+    color: var(--accent-hover);
+  }
+  .wizard-step-ind.complete .circle {
+    background: var(--ok, #22c55e);
+    border-color: var(--ok, #22c55e);
+    color: #fff;
+  }
+  .wizard-step-ind.complete .circle::after {
+    content: '✓';
+  }
+  .wizard-progress-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin: 0 8px;
+    margin-bottom: 22px; /* align with circle center above label */
+  }
+
+  /* Wizard nav buttons row */
+  .wizard-nav {
+    display: flex;
+    gap: 8px;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    margin-top: 1.25rem;
+  }
+
+  /* Step error */
+  .wizard-step-error {
+    display: block;
+    color: var(--fail);
+    font-size: 0.78rem;
+    margin-top: 0.75rem;
+    min-height: 1em;
+  }
+{% endif %}{# wizard_mode CSS #}
 </style>
 {% endblock %}
 
@@ -196,6 +282,274 @@
     {% if form.non_field_errors %}
       <div class="dp-alert dp-alert-danger mb-3">✗ {{ form.non_field_errors }}</div>
     {% endif %}
+
+    {% if wizard_mode %}
+
+    {# ── Phase 2: Progress bar ── #}
+    <div class="wizard-progress">
+      <div class="wizard-step-ind active" data-ind="1">
+        <div class="circle">1</div>
+        <div class="step-label">Connection &amp; Table</div>
+      </div>
+      <div class="wizard-progress-line"></div>
+      <div class="wizard-step-ind" data-ind="2">
+        <div class="circle">2</div>
+        <div class="step-label">Rule Type &amp; Conditions</div>
+      </div>
+      <div class="wizard-progress-line"></div>
+      <div class="wizard-step-ind" data-ind="3">
+        <div class="circle">3</div>
+        <div class="step-label">Schedule &amp; Settings</div>
+      </div>
+    </div>
+
+    {# ── Step 1: Connection + Target table ── #}
+    <div class="wizard-step active" data-step="1">
+
+      <div class="form-section-label">Rule identity</div>
+
+      <div class="mb-3">
+        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label for="{{ form.connection.id_for_label }}" class="form-label">{{ form.connection.label }}</label>
+        {{ form.connection }}
+        {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      {# Target table section (in wizard mode: lives in Step 1) #}
+      <div class="form-section-label">
+        Target table
+        <span id="schema-spinner" class="schema-spinner" style="margin-left:6px"></span>
+      </div>
+
+      <div id="table-browser" style="display:none; margin-bottom: 1rem;">
+        <div class="schema-browser">
+          <div class="schema-browser-header">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 4h8" stroke="currentColor" stroke-width="1"/></svg>
+            Tables
+          </div>
+          <div class="schema-list" id="table-list"></div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4" id="table-inputs">
+        <div class="col-6">
+          <label for="{{ form.schema_name.id_for_label }}" class="form-label">{{ form.schema_name.label }}</label>
+          {{ form.schema_name }}
+          {% if form.schema_name.errors %}<div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="col-6">
+          <label for="{{ form.table_name.id_for_label }}" class="form-label">{{ form.table_name.label }}</label>
+          {{ form.table_name }}
+          {% if form.table_name.errors %}<div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <span class="wizard-step-error" id="step-1-error"></span>
+      <div class="wizard-nav">
+        <button type="button" class="btn-dp btn-dp-primary wizard-next-btn" data-target="2">Next →</button>
+      </div>
+    </div>{# /wizard-step 1 #}
+
+    {# ── Step 2: Rule type + Conditions ── #}
+    <div class="wizard-step" data-step="2">
+
+      {# S-06: Rule type toggle #}
+      <div class="form-section-label">Rule type</div>
+      {{ form.rule_type }}
+      <div class="rule-type-tabs" id="rule-type-tabs">
+        <div class="rule-type-tab{% if not form.rule_type.value or form.rule_type.value == 'volume_freshness' %} active{% endif %}" data-type="volume_freshness">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><rect x="1" y="2" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="5.25" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="8.5" width="6" height="1.5" rx=".75" fill="currentColor"/></svg>
+          Volume / Freshness
+        </div>
+        <div class="rule-type-tab{% if form.rule_type.value == 'custom_sql' %} active{% endif %}" data-type="custom_sql">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><path d="M3 4L1 6l2 2M9 4l2 2-2 2M7 2l-2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Custom SQL
+        </div>
+      </div>
+
+      {# S-06: Custom SQL section #}
+      <div id="custom-sql-section" style="display:{% if form.rule_type.value == 'custom_sql' %}block{% else %}none{% endif %}">
+        <div id="tpl-gallery-section" class="mb-3">
+          <div class="form-section-label">Templates <span class="optional-tag">optional</span></div>
+          <div id="tpl-gallery" class="tpl-gallery"><!-- cards injected by JS --></div>
+          <div id="tpl-params" class="tpl-params" style="display:none">
+            <button type="button" id="tpl-apply-btn" class="btn-dp btn-dp-primary" style="font-size:0.78rem;padding:5px 14px;margin-top:8px">Apply template</button>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label for="{{ form.custom_sql.id_for_label }}" class="form-label">SQL query</label>
+          <textarea id="{{ form.custom_sql.id_for_label }}" name="custom_sql"
+            class="form-control" rows="5"
+            style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;resize:vertical"
+            placeholder="SELECT COUNT(*) > 0 FROM public.orders WHERE created_at > NOW() - INTERVAL '1 hour'">{{ form.custom_sql.value|default:'' }}</textarea>
+          <div style="font-size:0.72rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:5px;padding:6px 10px;margin-top:6px;font-family:'JetBrains Mono',monospace">
+            Returns <strong style="color:var(--ok)">true</strong> / <strong style="color:var(--ok)">1</strong> = OK &nbsp;·&nbsp;
+            <strong style="color:var(--fail)">false</strong> / <strong style="color:var(--fail)">0</strong> / NULL / empty = FAIL
+          </div>
+          {% if form.custom_sql.errors %}<div class="field-error">✗ {{ form.custom_sql.errors|join:", " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# Volume / Freshness monitoring conditions (in wizard mode: no table inputs here) #}
+      <div id="vf-section" style="display:{% if form.rule_type.value == 'custom_sql' %}none{% else %}block{% endif %}">
+
+        <div class="form-section-label">Monitoring conditions</div>
+
+        <div class="mb-4">
+          <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
+            {{ form.min_row_count.label }}<span class="optional-tag">optional</span>
+          </label>
+          {{ form.min_row_count }}
+          {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
+          {% if form.min_row_count.errors %}<div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>{% endif %}
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-7">
+            <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
+              {{ form.timestamp_column.label }}<span class="optional-tag">optional</span>
+            </label>
+            <div id="column-browser" style="display:none; margin-bottom:6px;">
+              <div class="schema-browser">
+                <div class="schema-browser-header">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="4.4" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="6.8" width="5" height="1.2" rx=".5" fill="currentColor"/></svg>
+                  Timestamp columns
+                  <span id="col-spinner" class="schema-spinner"></span>
+                </div>
+                <div class="schema-list" id="column-list"></div>
+              </div>
+            </div>
+            {{ form.timestamp_column }}
+            {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
+            {% if form.timestamp_column.errors %}<div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-5">
+            <label for="{{ form.max_age_hours.id_for_label }}" class="form-label">{{ form.max_age_hours.label }}</label>
+            {{ form.max_age_hours }}
+            {% if form.max_age_hours.errors %}<div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+      </div>{# /vf-section #}
+
+      <span class="wizard-step-error" id="step-2-error"></span>
+      <div class="wizard-nav">
+        <button type="button" class="btn-dp btn-dp-ghost wizard-back-btn" data-target="1">← Back</button>
+        <button type="button" class="btn-dp btn-dp-primary wizard-next-btn" data-target="3">Next →</button>
+      </div>
+    </div>{# /wizard-step 2 #}
+
+    {# ── Step 3: Schedule + Notifications + forward-compat slots ── #}
+    <div class="wizard-step" data-step="3">
+
+      {# Schedule #}
+      <div class="form-section-label">Schedule</div>
+
+      <div class="mb-2" id="preset-buttons" style="display:none">
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Quick presets</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8 * * *">08:00 daily</button>
+          <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8,20 * * *">08:00 &amp; 20:00</button>
+          <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 6,14,22 * * *">6h/14h/22h</button>
+          <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 */4 * * *">Every 4h</button>
+          <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 * * * *">Hourly</button>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="{{ form.schedule_type.id_for_label }}" class="form-label">
+          {{ form.schedule_type.label }}<span class="optional-tag">optional</span>
+        </label>
+        {{ form.schedule_type }}
+        {% if form.schedule_type.errors %}<div class="field-error">✗ {{ form.schedule_type.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div id="custom-cron-row" class="mb-4" style="display:none">
+        <label for="{{ form.schedule_cron.id_for_label }}" class="form-label">
+          {{ form.schedule_cron.label }}
+        </label>
+        {{ form.schedule_cron }}
+        {% if form.schedule_cron.help_text %}<div class="form-text">{{ form.schedule_cron.help_text }}</div>{% endif %}
+        {% if form.schedule_cron.errors %}<div class="field-error">✗ {{ form.schedule_cron.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      {# Notifications #}
+      <div class="form-section-label">Notifications</div>
+      <div class="mb-3">
+        <div class="form-check">
+          {{ form.notify_on_fail }}
+          <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
+            Notify me on failure
+          </label>
+        </div>
+        <div class="form-text" style="margin-top:4px">
+          Send an email when this rule returns FAIL or ERROR.
+          Requires your account to have an email address set.
+          Cooldown: at most one email per hour per rule.
+        </div>
+        {% if form.notify_on_fail.errors %}
+          <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-4">
+        <div class="form-check">
+          {{ form.notify_slack }}
+          <label class="form-check-label" for="{{ form.notify_slack.id_for_label }}">
+            Notify via Slack
+          </label>
+        </div>
+        <div class="form-text" style="margin-top:4px">
+          Send a Slack Block Kit message when this rule returns FAIL or ERROR.
+          Requires at least one enabled webhook in
+          <a href="{% url 'monitor:slack_webhook_list' %}" style="color:var(--accent-hover)">Slack Webhooks</a>.
+          Cooldown: at most one message per hour per rule.
+        </div>
+        {% if form.notify_slack.errors %}
+          <div class="field-error">✗ {{ form.notify_slack.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      {# Tags #}
+      <div class="form-section-label">Tags <span class="optional-tag">optional</span></div>
+      <div class="mb-4" id="tags-field-group">
+        <div id="tag-chip-container" style="
+          display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+          border:1px solid var(--border); border-radius:6px;
+          padding:6px 8px; background:var(--bg-elevated); min-height:38px;
+          cursor:text;" onclick="document.getElementById('tag-input').focus()">
+          <input type="text" id="tag-input" placeholder="Add tag…" autocomplete="off"
+            style="border:none;outline:none;background:transparent;
+                   font-size:0.85rem;color:var(--text-primary);flex:1;min-width:80px;">
+        </div>
+        <input type="hidden" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}">
+        <div class="form-text">Up to 5 tags. Letters, digits, hyphens. Press Enter or comma to add.</div>
+        {% if form.tags.errors %}
+          <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      {# Forward-compat slots for S-26/S-27/S-28 #}
+      <div id="wizard-slot-description"></div>
+      <div id="wizard-slot-severity"></div>
+      <div id="wizard-slot-tags-extra"></div>
+
+      <div class="wizard-nav">
+        <button type="button" class="btn-dp btn-dp-ghost wizard-back-btn" data-target="2">← Back</button>
+        <button type="submit" class="btn-dp btn-dp-primary">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Save rule
+        </button>
+        <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Cancel</a>
+      </div>
+    </div>{# /wizard-step 3 #}
+
+    {% else %}{# non-wizard (edit) path — current markup verbatim #}
 
     <!-- ── Rule identity ── -->
     <div class="form-section-label">Rule identity</div>
@@ -395,6 +749,26 @@
       {% endif %}
     </div>
 
+    <!-- ── Tags ── -->
+    <div class="form-section-label">Tags <span class="optional-tag">optional</span></div>
+    <div class="mb-4" id="tags-field-group">
+      <div id="tag-chip-container" style="
+        display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+        border:1px solid var(--border); border-radius:6px;
+        padding:6px 8px; background:var(--bg-elevated); min-height:38px;
+        cursor:text;" onclick="document.getElementById('tag-input').focus()">
+        <!-- chips inserted here by JS -->
+        <input type="text" id="tag-input" placeholder="Add tag…" autocomplete="off"
+          style="border:none;outline:none;background:transparent;
+                 font-size:0.85rem;color:var(--text-primary);flex:1;min-width:80px;">
+      </div>
+      <input type="hidden" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}">
+      <div class="form-text">Up to 5 tags. Letters, digits, hyphens. Press Enter or comma to add.</div>
+      {% if form.tags.errors %}
+        <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
     <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
       <button type="submit" class="btn-dp btn-dp-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -402,11 +776,83 @@
       </button>
       <a href="{% url 'monitor:dashboard' %}" class="btn-dp btn-dp-ghost">Cancel</a>
     </div>
+
+    {% endif %}{# /wizard_mode #}
+
   </form>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+// Tag chip widget
+(function() {
+  const container = document.getElementById('tag-chip-container');
+  const input     = document.getElementById('tag-input');
+  const hidden    = document.getElementById('id_tags');
+  if (!container || !input || !hidden) return;
+  const MAX_TAGS  = 5;
+  const MAX_LEN   = 30;
+  const VALID     = /^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$/;
+
+  let tags = hidden.value ? hidden.value.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  function renderChips() {
+    container.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    tags.forEach((tag, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip cond-pill';
+      chip.style.cssText = 'color:var(--accent-hover);border-color:rgba(99,102,241,0.25);background:var(--accent-dim);cursor:default';
+      chip.innerHTML = tag + ' <span style="cursor:pointer;margin-left:2px" data-i="' + i + '">✕</span>';
+      chip.querySelector('span').addEventListener('click', function() {
+        tags.splice(parseInt(this.dataset.i), 1);
+        renderChips();
+        syncHidden();
+      });
+      container.insertBefore(chip, input);
+    });
+    input.placeholder = tags.length >= MAX_TAGS ? '' : 'Add tag…';
+    input.disabled = tags.length >= MAX_TAGS;
+  }
+
+  function syncHidden() {
+    hidden.value = tags.join(',');
+  }
+
+  function addTag(raw) {
+    const tag = raw.trim().toLowerCase();
+    if (!tag) return;
+    if (tags.length >= MAX_TAGS) return;
+    if (tag.length > MAX_LEN) { input.style.borderBottom = '2px solid var(--error)'; return; }
+    if (!VALID.test(tag)) { input.style.borderBottom = '2px solid var(--error)'; return; }
+    if (tags.includes(tag)) { input.value = ''; return; }
+    input.style.borderBottom = '';
+    tags.push(tag);
+    input.value = '';
+    renderChips();
+    syncHidden();
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(this.value);
+    }
+    if (e.key === 'Backspace' && this.value === '' && tags.length) {
+      tags.pop();
+      renderChips();
+      syncHidden();
+    }
+  });
+
+  input.addEventListener('blur', function() {
+    if (this.value.trim()) addTag(this.value);
+  });
+
+  renderChips();
+}());
+</script>
+
 <script>
 // S-06: Rule type toggle
 (function() {
@@ -427,7 +873,7 @@
     tab.addEventListener('click', () => setType(tab.dataset.type));
   });
 
-  // Allow external code (template gallery) to switch rule type via custom event
+  // Allow external code (template gallery, wizard) to switch rule type via custom event
   document.addEventListener('dp:setType', (e) => {
     if (e.detail && e.detail.type) setType(e.detail.type);
   });
@@ -781,5 +1227,190 @@
   });
 }());
 
+// dp-wizard: Phase 3 — Step navigation + sessionStorage; Phase 4 — validation
+{% if wizard_mode %}
+(function() {
+  if (!document.querySelector('.wizard-step')) return;
+
+  var STORAGE_KEY = 'dp_wiz_rule_create';
+  var currentStep = 1;
+
+  // ── Progress indicator ────────────────────────────────────────────
+  function updateProgressBar(step) {
+    document.querySelectorAll('.wizard-step-ind').forEach(function(ind) {
+      var n = parseInt(ind.getAttribute('data-ind'), 10);
+      ind.classList.remove('active', 'complete');
+      if (n < step) {
+        ind.classList.add('complete');
+        // Show checkmark in circle
+        var circle = ind.querySelector('.circle');
+        if (circle) circle.textContent = '✓';
+      } else if (n === step) {
+        ind.classList.add('active');
+        var circle = ind.querySelector('.circle');
+        if (circle) circle.textContent = String(n);
+      } else {
+        var circle = ind.querySelector('.circle');
+        if (circle) circle.textContent = String(n);
+      }
+    });
+  }
+
+  // ── Show step ──────────────────────────────────────────────────────
+  function showStep(n) {
+    document.querySelectorAll('.wizard-step').forEach(function(s) {
+      s.classList.remove('active');
+    });
+    var target = document.querySelector('.wizard-step[data-step="' + n + '"]');
+    if (target) target.classList.add('active');
+    updateProgressBar(n);
+    currentStep = n;
+    window.scrollTo(0, 0);
+
+    // Re-fire rule type toggle so vf-section/custom-sql-section sync correctly on step 2
+    if (n === 2) {
+      var ruleTypeInput = document.querySelector('input[name="rule_type"]:checked');
+      var currentType = ruleTypeInput ? ruleTypeInput.value : 'volume_freshness';
+      document.dispatchEvent(new CustomEvent('dp:setType', { detail: { type: currentType } }));
+    }
+  }
+
+  // ── sessionStorage ─────────────────────────────────────────────────
+  function saveToStorage() {
+    var form = document.getElementById('rule-form');
+    if (!form) return;
+    var data = { _step: currentStep };
+    Array.from(form.elements).forEach(function(el) {
+      if (!el.name) return;
+      if (el.type === 'checkbox') {
+        data[el.name] = el.checked;
+      } else if (el.type === 'radio') {
+        if (el.checked) data[el.name] = el.value;
+      } else {
+        data[el.name] = el.value;
+      }
+    });
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { /* quota or private mode */ }
+  }
+
+  function restoreFromStorage() {
+    var raw;
+    try {
+      raw = sessionStorage.getItem(STORAGE_KEY);
+    } catch (e) { return false; }
+    if (!raw) return false;
+    var data;
+    try { data = JSON.parse(raw); } catch (e) { return false; }
+
+    var form = document.getElementById('rule-form');
+    if (!form) return false;
+
+    Array.from(form.elements).forEach(function(el) {
+      if (!el.name || !(el.name in data)) return;
+      if (el.type === 'checkbox') {
+        el.checked = !!data[el.name];
+      } else if (el.type === 'radio') {
+        el.checked = (el.value === data[el.name]);
+      } else {
+        el.value = data[el.name];
+      }
+    });
+
+    var savedStep = parseInt(data._step, 10) || 1;
+    showStep(savedStep);
+    return true;
+  }
+
+  // ── Step validation ────────────────────────────────────────────────
+  function validateStep(n) {
+    var errEl = document.getElementById('step-' + n + '-error');
+    if (errEl) errEl.textContent = '';
+
+    if (n === 1) {
+      var nameField = document.querySelector('input[name="name"]');
+      var connField = document.querySelector('select[name="connection"]');
+      var nameOk = nameField && nameField.value.trim() !== '';
+      var connOk = connField && connField.value !== '';
+      if (!nameOk || !connOk) {
+        if (errEl) errEl.textContent = 'Please enter a rule name and select a connection.';
+        return false;
+      }
+      return true;
+    }
+
+    if (n === 2) {
+      var ruleTypeInput = document.querySelector('input[name="rule_type"]:checked');
+      var activeType = ruleTypeInput ? ruleTypeInput.value : 'volume_freshness';
+
+      if (activeType === 'custom_sql') {
+        var sqlField = document.getElementById('id_custom_sql');
+        if (!sqlField || sqlField.value.trim() === '') {
+          if (errEl) errEl.textContent = 'Please enter a SQL query.';
+          return false;
+        }
+        return true;
+      } else {
+        // volume_freshness: at least min_row_count OR (timestamp_column + max_age_hours)
+        var minRowsField = document.getElementById('id_min_row_count');
+        var tsColField = document.getElementById('id_timestamp_column');
+        var maxAgeField = document.getElementById('id_max_age_hours');
+        var hasVolume = minRowsField && minRowsField.value.trim() !== '';
+        var hasFreshness = tsColField && tsColField.value.trim() !== '' &&
+                           maxAgeField && maxAgeField.value.trim() !== '';
+        if (!hasVolume && !hasFreshness) {
+          if (errEl) errEl.textContent = 'Please fill in at least one monitoring condition.';
+          return false;
+        }
+        return true;
+      }
+    }
+
+    // Step 3: no required fields
+    return true;
+  }
+
+  // ── Navigation buttons ─────────────────────────────────────────────
+  document.querySelectorAll('.wizard-next-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var targetStep = parseInt(btn.getAttribute('data-target'), 10);
+      if (!validateStep(currentStep)) return;
+      saveToStorage();
+      showStep(targetStep);
+    });
+  });
+
+  document.querySelectorAll('.wizard-back-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var targetStep = parseInt(btn.getAttribute('data-target'), 10);
+      saveToStorage();
+      showStep(targetStep);
+    });
+  });
+
+  // Clear storage on submit
+  var form = document.getElementById('rule-form');
+  if (form) {
+    form.addEventListener('submit', function() {
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!restoreFromStorage()) {
+      showStep(1);
+    }
+  });
+
+  // If DOMContentLoaded already fired (script at end of body), init immediately
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    if (!restoreFromStorage()) {
+      showStep(1);
+    }
+  }
+}());
+{% endif %}{# wizard_mode JS #}
 </script>
 {% endblock %}

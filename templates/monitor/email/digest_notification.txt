@@ -5,7 +5,8 @@ DataPulse — Run #{{ run.pk }} Digest
 Total failures: {{ fail_count }} FAIL, {{ error_count }} ERROR
 
 {% for result in failing_results %}Rule:     {{ result.rule.name }}
-Status:   {{ result.status }}
+{% if result.rule.description %}Note:     {{ result.rule.description }}
+{% endif %}Status:   {{ result.status }}
 {% if result.rule.schema_name and result.rule.table_name %}Table:    {{ result.rule.schema_name }}.{{ result.rule.table_name }}{% else %}Type:     Custom SQL{% endif %}
 {% if result.row_count is not None %}Rows:     {{ result.row_count }}{% endif %}
 {% if result.last_record_age_hours is not None %}Age:      {{ result.last_record_age_hours|floatformat:1 }} hours{% endif %}

@@ -2,7 +2,8 @@ DataPulse — Rule Check Failure
 ================================
 
 Rule:   {{ rule.name }}
-Status: {{ result.status }}
+{% if rule.description %}Note:   {{ rule.description }}
+{% endif %}Status: {{ result.status }}
 Time:   {{ result.checked_at }}
 
 {% if rule.schema_name and rule.table_name %}Table:  {{ rule.schema_name }}.{{ rule.table_name }}{% else %}Type:   Custom SQL{% endif %}

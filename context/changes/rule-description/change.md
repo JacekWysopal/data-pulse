@@ -1,9 +1,9 @@
 ---
 change_id: rule-description
 title: Rule description field — optional human-readable note per rule
-status: new
+status: implemented
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 archived_at: null
 ---
 

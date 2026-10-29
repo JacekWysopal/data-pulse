@@ -1,9 +1,9 @@
 ---
 change_id: rule-severity
 title: Rule severity — critical/warning/info levels affecting badge color and notifications
-status: preparing
+status: implemented
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 archived_at: null
 ---
 

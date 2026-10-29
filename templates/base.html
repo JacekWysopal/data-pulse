@@ -45,6 +45,8 @@
 
       --error:           #fbbf24;
       --error-dim:       rgba(251,191,36,0.12);
+      --info:            #3b82f6;
+      --info-dim:        rgba(59,130,246,0.12);
 
       --nav-width:       240px;
       --nav-collapsed:   60px;
@@ -491,6 +493,12 @@
     .dp-badge-error .dp-badge-dot { background: var(--error); }
     .dp-badge-never { color: var(--text-muted); background: transparent; border-color: var(--border-strong); }
     .dp-badge-never .dp-badge-dot { background: var(--text-muted); }
+    .dp-badge-severity-critical { color: var(--fail);  background: var(--fail-dim);  border-color: rgba(248,113,113,0.25); }
+    .dp-badge-severity-critical .dp-badge-dot { background: var(--fail); }
+    .dp-badge-severity-warning  { color: var(--error); background: var(--error-dim); border-color: rgba(251,191,36,0.25); }
+    .dp-badge-severity-warning  .dp-badge-dot { background: var(--error); }
+    .dp-badge-severity-info     { color: var(--info);  background: var(--info-dim);  border-color: rgba(59,130,246,0.25); }
+    .dp-badge-severity-info     .dp-badge-dot { background: var(--info); }
 
     /* ═══ TABLE ══════════════════════════════════════════════════ */
     .dp-table { margin: 0; width: 100%; border-collapse: separate; border-spacing: 0; }

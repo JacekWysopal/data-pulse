@@ -75,6 +75,9 @@
   <div>
     <div class="rule-meta-name">{{ rule.name }}</div>
     <div class="rule-meta-table"><code>{{ rule.schema_name }}.{{ rule.table_name }}</code></div>
+    {% if rule.description %}
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">{{ rule.description }}</div>
+    {% endif %}
     <div class="cond-chips">
       {% if rule.min_row_count is not None %}
         <span class="cond-chip">
