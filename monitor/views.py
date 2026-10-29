@@ -40,7 +40,7 @@ def signup(request):
 @login_required
 def dashboard(request):
     rules = Rule.objects.select_related('connection').prefetch_related('results').filter(user=request.user)
-    last_run = CheckRun.objects.first()
+    last_run = CheckRun.objects.filter(results__rule__user=request.user).distinct().order_by('-started_at').first()
 
     ok_count = fail_count = error_count = never_count = 0
     rule_status = []
