@@ -512,12 +512,18 @@
       color: var(--text-primary) !important; border-radius: var(--radius) !important;
       font-size: 0.85rem; padding: 0.5rem 0.85rem;
       transition: border-color 0.15s, box-shadow 0.15s;
+      color-scheme: dark;
     }
     .form-control:focus, .form-select:focus {
       border-color: var(--border-focus) !important; outline: none;
       box-shadow: 0 0 0 3px var(--accent-dim) !important; background: var(--bg-card) !important;
     }
     .form-control::placeholder { color: var(--text-muted); }
+    /* Native select option dark background */
+    .form-select option, select option {
+      background: #0f0f18;
+      color: var(--text-primary, #f1f5f9);
+    }
     .form-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
     .form-text  { color: var(--text-muted); font-size: 0.75rem; }
 
