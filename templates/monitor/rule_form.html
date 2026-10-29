@@ -614,6 +614,16 @@
       {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
     </div>
 
+    {% if form.description %}
+    <div class="mb-4">
+      <label for="{{ form.description.id_for_label }}" class="form-label">
+        {{ form.description.label }}<span class="optional-tag">optional</span>
+      </label>
+      {{ form.description }}
+      {% if form.description.errors %}<div class="field-error">✗ {{ form.description.errors|join:", " }}</div>{% endif %}
+    </div>
+    {% endif %}
+
     <!-- ══════════════════════════════════════════════════════════ -->
     <!-- Section 1: Connection & Target                           -->
     <!-- ══════════════════════════════════════════════════════════ -->
@@ -774,17 +784,6 @@
         <span class="form-section-summary-hint" id="hint-settings"></span>
       </summary>
       <div class="form-section-body">
-
-        <!-- ── Description ── -->
-        {% if form.description %}
-        <div class="mb-3">
-          <label for="{{ form.description.id_for_label }}" class="form-label">
-            {{ form.description.label }}<span class="optional-tag">optional</span>
-          </label>
-          {{ form.description }}
-          {% if form.description.errors %}<div class="field-error">✗ {{ form.description.errors|join:", " }}</div>{% endif %}
-        </div>
-        {% endif %}
 
         <!-- ── Severity ── -->
         {% if form.severity %}
