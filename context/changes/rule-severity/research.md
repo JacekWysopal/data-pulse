@@ -127,7 +127,7 @@ Inspected migration files in `monitor/migrations/`:
 - `email_service.py:25-79` — `send_fail_notification` — flag guard at line 29
 - `slack_service.py:29-38` — `send_slack_notification` — flag guard at line 29
 - `monitor/services.py:373-374` — representative `notify_rule_result` call site (FAIL/ERROR guard)
-- `monitor/services.py:446-501` — digest mode failure collection (10 call sites total in services.py)
+- `monitor/services.py:446-501` — digest mode failure collection (12 call sites total in services.py)
 - `monitor/forms.py:57-59` — `RuleForm.Meta.fields` list
 - `templates/base.html:38-47` — CSS variable declarations (--ok, --fail, --error, missing --info)
 - `templates/base.html:480-493` — `dp-badge-*` class definitions
