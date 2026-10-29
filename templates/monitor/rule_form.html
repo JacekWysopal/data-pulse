@@ -4,7 +4,7 @@
 {% block extra_head %}
 <style>
   .form-card {
-    max-width: {% if wizard_mode %}640px{% else %}580px{% endif %};
+    max-width: {% if wizard_mode %}640px{% else %}680px{% endif %};
     background: var(--bg-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -176,6 +176,57 @@
   .tpl-params input[type="text"] {
     width: 100%;
     margin-bottom: 6px;
+  }
+
+  /* Collapsible form sections (used in non-wizard path) */
+  .form-section-collapsible {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+  }
+  .form-section-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    background: var(--bg-elevated);
+    user-select: none;
+    list-style: none;
+    gap: 8px;
+  }
+  .form-section-summary::-webkit-details-marker { display: none; }
+  .form-section-summary-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+  }
+  .form-section-summary::after {
+    content: '\25BE';
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  details.form-section-collapsible:not([open]) .form-section-summary::after {
+    transform: rotate(-90deg);
+  }
+  .form-section-summary-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex: 1;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 55%;
+  }
+  .form-section-body {
+    padding: 1rem 1rem 0.25rem;
+    border-top: 1px solid var(--border);
   }
 
 {% if wizard_mode %}
@@ -552,7 +603,7 @@
       </div>
     </div>{# /wizard-step 3 #}
 
-    {% else %}{# non-wizard (edit) path — current markup verbatim #}
+    {% else %}{# non-wizard path — all fields always in DOM, always submitted #}
 
     <!-- ── Rule identity ── -->
     <div class="form-section-label">Rule identity</div>
@@ -563,216 +614,279 @@
       {% if form.name.errors %}<div class="field-error">✗ {{ form.name.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="mb-4">
-      <label for="{{ form.connection.id_for_label }}" class="form-label">{{ form.connection.label }}</label>
-      {{ form.connection }}
-      {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
-    </div>
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- Section 1: Connection & Target                           -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <details class="form-section-collapsible" id="section-connection" open>
+      <summary class="form-section-summary">
+        <span class="form-section-summary-title">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style="margin-right:5px;opacity:0.6"><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5.5h4M5.5 3.5v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Connection &amp; Target
+        </span>
+        <span class="form-section-summary-hint" id="hint-connection"></span>
+      </summary>
+      <div class="form-section-body">
 
-    <!-- S-06: Rule type toggle -->
-    <div class="form-section-label">Rule type</div>
-    {{ form.rule_type }}
-    <div class="rule-type-tabs" id="rule-type-tabs">
-      <div class="rule-type-tab{% if not form.rule_type.value or form.rule_type.value == 'volume_freshness' %} active{% endif %}" data-type="volume_freshness">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><rect x="1" y="2" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="5.25" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="8.5" width="6" height="1.5" rx=".75" fill="currentColor"/></svg>
-        Volume / Freshness
-      </div>
-      <div class="rule-type-tab{% if form.rule_type.value == 'custom_sql' %} active{% endif %}" data-type="custom_sql">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><path d="M3 4L1 6l2 2M9 4l2 2-2 2M7 2l-2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        Custom SQL
-      </div>
-    </div>
-
-    <!-- S-06: Custom SQL section -->
-    <div id="custom-sql-section" style="display:{% if form.rule_type.value == 'custom_sql' %}block{% else %}none{% endif %}">
-      <!-- Template gallery — check-templates -->
-      <div id="tpl-gallery-section" class="mb-3">
-        <div class="form-section-label">Templates <span class="optional-tag">optional</span></div>
-        <div id="tpl-gallery" class="tpl-gallery"><!-- cards injected by JS --></div>
-        <div id="tpl-params" class="tpl-params" style="display:none">
-          <!-- param inputs injected by JS -->
-          <button type="button" id="tpl-apply-btn" class="btn-dp btn-dp-primary" style="font-size:0.78rem;padding:5px 14px;margin-top:8px">Apply template</button>
+        <div class="mb-4">
+          <label for="{{ form.connection.id_for_label }}" class="form-label">{{ form.connection.label }}</label>
+          {{ form.connection }}
+          {% if form.connection.errors %}<div class="field-error">✗ {{ form.connection.errors|join:", " }}</div>{% endif %}
         </div>
-      </div>
-      <div class="mb-4">
-        <label for="{{ form.custom_sql.id_for_label }}" class="form-label">SQL query</label>
-        <textarea id="{{ form.custom_sql.id_for_label }}" name="custom_sql"
-          class="form-control" rows="5"
-          style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;resize:vertical"
-          placeholder="SELECT COUNT(*) > 0 FROM public.orders WHERE created_at > NOW() - INTERVAL '1 hour'">{{ form.custom_sql.value|default:'' }}</textarea>
-        <div style="font-size:0.72rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:5px;padding:6px 10px;margin-top:6px;font-family:'JetBrains Mono',monospace">
-          Returns <strong style="color:var(--ok)">true</strong> / <strong style="color:var(--ok)">1</strong> = OK &nbsp;·&nbsp;
-          <strong style="color:var(--fail)">false</strong> / <strong style="color:var(--fail)">0</strong> / NULL / empty = FAIL
+
+        <div class="form-section-label">
+          Target table
+          <span id="schema-spinner" class="schema-spinner" style="margin-left:6px"></span>
         </div>
-        {% if form.custom_sql.errors %}<div class="field-error">✗ {{ form.custom_sql.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
 
-    <!-- Volume / Freshness section -->
-    <div id="vf-section" style="display:{% if form.rule_type.value == 'custom_sql' %}none{% else %}block{% endif %}">
-
-    <!-- ── Table selector (S-04/S-05) ── -->
-    <div class="form-section-label">
-      Target table
-      <span id="schema-spinner" class="schema-spinner" style="margin-left:6px"></span>
-    </div>
-
-    <!-- Table browser — shown when connection selected -->
-    <div id="table-browser" style="display:none; margin-bottom: 1rem;">
-      <div class="schema-browser">
-        <div class="schema-browser-header">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 4h8" stroke="currentColor" stroke-width="1"/></svg>
-          Tables
-        </div>
-        <div class="schema-list" id="table-list"></div>
-      </div>
-    </div>
-
-    <!-- Manual fallback / always-visible text inputs -->
-    <div class="row g-3 mb-4" id="table-inputs">
-      <div class="col-6">
-        <label for="{{ form.schema_name.id_for_label }}" class="form-label">{{ form.schema_name.label }}</label>
-        {{ form.schema_name }}
-        {% if form.schema_name.errors %}<div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>{% endif %}
-      </div>
-      <div class="col-6">
-        <label for="{{ form.table_name.id_for_label }}" class="form-label">{{ form.table_name.label }}</label>
-        {{ form.table_name }}
-        {% if form.table_name.errors %}<div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- ── Monitoring conditions ── -->
-    <div class="form-section-label">Monitoring conditions</div>
-
-    <div class="mb-4">
-      <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
-        {{ form.min_row_count.label }}<span class="optional-tag">optional</span>
-      </label>
-      {{ form.min_row_count }}
-      {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
-      {% if form.min_row_count.errors %}<div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="row g-3 mb-4">
-      <div class="col-7">
-        <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
-          {{ form.timestamp_column.label }}<span class="optional-tag">optional</span>
-        </label>
-        <!-- Column browser -->
-        <div id="column-browser" style="display:none; margin-bottom:6px;">
+        <div id="table-browser" style="display:none; margin-bottom: 1rem;">
           <div class="schema-browser">
             <div class="schema-browser-header">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="4.4" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="6.8" width="5" height="1.2" rx=".5" fill="currentColor"/></svg>
-              Timestamp columns
-              <span id="col-spinner" class="schema-spinner"></span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 4h8" stroke="currentColor" stroke-width="1"/></svg>
+              Tables
             </div>
-            <div class="schema-list" id="column-list"></div>
+            <div class="schema-list" id="table-list"></div>
           </div>
         </div>
-        {{ form.timestamp_column }}
-        {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
-        {% if form.timestamp_column.errors %}<div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>{% endif %}
+
+        <div class="row g-3 mb-2" id="table-inputs">
+          <div class="col-6">
+            <label for="{{ form.schema_name.id_for_label }}" class="form-label">{{ form.schema_name.label }}</label>
+            {{ form.schema_name }}
+            {% if form.schema_name.errors %}<div class="field-error">✗ {{ form.schema_name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-6">
+            <label for="{{ form.table_name.id_for_label }}" class="form-label">{{ form.table_name.label }}</label>
+            {{ form.table_name }}
+            {% if form.table_name.errors %}<div class="field-error">✗ {{ form.table_name.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
       </div>
-      <div class="col-5">
-        <label for="{{ form.max_age_hours.id_for_label }}" class="form-label">{{ form.max_age_hours.label }}</label>
-        {{ form.max_age_hours }}
-        {% if form.max_age_hours.errors %}<div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>{% endif %}
+    </details>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- Section 2: Conditions                                    -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <details class="form-section-collapsible" id="section-conditions" open>
+      <summary class="form-section-summary">
+        <span class="form-section-summary-title">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style="margin-right:5px;opacity:0.6"><path d="M2 3h7M2 5.5h5M2 8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Conditions
+        </span>
+        <span class="form-section-summary-hint" id="hint-conditions"></span>
+      </summary>
+      <div class="form-section-body">
+
+        <!-- S-06: Rule type toggle -->
+        <div class="form-section-label">Rule type</div>
+        {{ form.rule_type }}
+        <div class="rule-type-tabs" id="rule-type-tabs">
+          <div class="rule-type-tab{% if not form.rule_type.value or form.rule_type.value == 'volume_freshness' %} active{% endif %}" data-type="volume_freshness">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><rect x="1" y="2" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="5.25" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1" y="8.5" width="6" height="1.5" rx=".75" fill="currentColor"/></svg>
+            Volume / Freshness
+          </div>
+          <div class="rule-type-tab{% if form.rule_type.value == 'custom_sql' %} active{% endif %}" data-type="custom_sql">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="margin-right:5px"><path d="M3 4L1 6l2 2M9 4l2 2-2 2M7 2l-2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            Custom SQL
+          </div>
+        </div>
+
+        <!-- S-06: Custom SQL section -->
+        <div id="custom-sql-section" style="display:{% if form.rule_type.value == 'custom_sql' %}block{% else %}none{% endif %}">
+          <!-- Template gallery — check-templates -->
+          <div id="tpl-gallery-section" class="mb-3">
+            <div class="form-section-label">Templates <span class="optional-tag">optional</span></div>
+            <div id="tpl-gallery" class="tpl-gallery"><!-- cards injected by JS --></div>
+            <div id="tpl-params" class="tpl-params" style="display:none">
+              <!-- param inputs injected by JS -->
+              <button type="button" id="tpl-apply-btn" class="btn-dp btn-dp-primary" style="font-size:0.78rem;padding:5px 14px;margin-top:8px">Apply template</button>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label for="{{ form.custom_sql.id_for_label }}" class="form-label">SQL query</label>
+            <textarea id="{{ form.custom_sql.id_for_label }}" name="custom_sql"
+              class="form-control" rows="5"
+              style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;resize:vertical"
+              placeholder="SELECT COUNT(*) > 0 FROM public.orders WHERE created_at > NOW() - INTERVAL '1 hour'">{{ form.custom_sql.value|default:'' }}</textarea>
+            <div style="font-size:0.72rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:5px;padding:6px 10px;margin-top:6px;font-family:'JetBrains Mono',monospace">
+              Returns <strong style="color:var(--ok)">true</strong> / <strong style="color:var(--ok)">1</strong> = OK &nbsp;·&nbsp;
+              <strong style="color:var(--fail)">false</strong> / <strong style="color:var(--fail)">0</strong> / NULL / empty = FAIL
+            </div>
+            {% if form.custom_sql.errors %}<div class="field-error">✗ {{ form.custom_sql.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- Volume / Freshness section -->
+        <div id="vf-section" style="display:{% if form.rule_type.value == 'custom_sql' %}none{% else %}block{% endif %}">
+
+          <div class="form-section-label">Monitoring conditions</div>
+
+          <div class="mb-4">
+            <label for="{{ form.min_row_count.id_for_label }}" class="form-label">
+              {{ form.min_row_count.label }}<span class="optional-tag">optional</span>
+            </label>
+            {{ form.min_row_count }}
+            {% if form.min_row_count.help_text %}<div class="form-text">{{ form.min_row_count.help_text }}</div>{% endif %}
+            {% if form.min_row_count.errors %}<div class="field-error">✗ {{ form.min_row_count.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="row g-3 mb-2">
+            <div class="col-7">
+              <label for="{{ form.timestamp_column.id_for_label }}" class="form-label">
+                {{ form.timestamp_column.label }}<span class="optional-tag">optional</span>
+              </label>
+              <!-- Column browser -->
+              <div id="column-browser" style="display:none; margin-bottom:6px;">
+                <div class="schema-browser">
+                  <div class="schema-browser-header">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="4.4" width="8" height="1.2" rx=".5" fill="currentColor"/><rect x="1" y="6.8" width="5" height="1.2" rx=".5" fill="currentColor"/></svg>
+                    Timestamp columns
+                    <span id="col-spinner" class="schema-spinner"></span>
+                  </div>
+                  <div class="schema-list" id="column-list"></div>
+                </div>
+              </div>
+              {{ form.timestamp_column }}
+              {% if form.timestamp_column.help_text %}<div class="form-text">{{ form.timestamp_column.help_text }}</div>{% endif %}
+              {% if form.timestamp_column.errors %}<div class="field-error">✗ {{ form.timestamp_column.errors|join:", " }}</div>{% endif %}
+            </div>
+            <div class="col-5">
+              <label for="{{ form.max_age_hours.id_for_label }}" class="form-label">{{ form.max_age_hours.label }}</label>
+              {{ form.max_age_hours }}
+              {% if form.max_age_hours.errors %}<div class="field-error">✗ {{ form.max_age_hours.errors|join:", " }}</div>{% endif %}
+            </div>
+          </div>
+
+        </div><!-- /vf-section -->
+
       </div>
-    </div>
+    </details>
 
-    </div><!-- /vf-section -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- Section 3: Schedule & Settings                           -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <details class="form-section-collapsible" id="section-settings" open>
+      <summary class="form-section-summary">
+        <span class="form-section-summary-title">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style="margin-right:5px;opacity:0.6"><circle cx="5.5" cy="5.5" r="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 1v1M5.5 9v1M1 5.5h1M9 5.5h1M2.4 2.4l.7.7M7.9 7.9l.7.7M2.4 8.6l.7-.7M7.9 3.1l.7-.7" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+          Schedule &amp; Settings
+        </span>
+        <span class="form-section-summary-hint" id="hint-settings"></span>
+      </summary>
+      <div class="form-section-body">
 
-    <!-- ── Schedule ── -->
-    <div class="form-section-label">Schedule</div>
+        <!-- ── Description ── -->
+        {% if form.description %}
+        <div class="mb-3">
+          <label for="{{ form.description.id_for_label }}" class="form-label">
+            {{ form.description.label }}<span class="optional-tag">optional</span>
+          </label>
+          {{ form.description }}
+          {% if form.description.errors %}<div class="field-error">✗ {{ form.description.errors|join:", " }}</div>{% endif %}
+        </div>
+        {% endif %}
 
-    <!-- Preset quick-fill buttons -->
-    <div class="mb-2" id="preset-buttons" style="display:none">
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Quick presets</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8 * * *">08:00 daily</button>
-        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8,20 * * *">08:00 &amp; 20:00</button>
-        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 6,14,22 * * *">6h/14h/22h</button>
-        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 */4 * * *">Every 4h</button>
-        <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 * * * *">Hourly</button>
+        <!-- ── Severity ── -->
+        {% if form.severity %}
+        <div class="mb-4">
+          <label for="{{ form.severity.id_for_label }}" class="form-label">{{ form.severity.label }}</label>
+          {{ form.severity }}
+          {% if form.severity.errors %}<div class="field-error">✗ {{ form.severity.errors|join:", " }}</div>{% endif %}
+        </div>
+        {% endif %}
+
+        <!-- ── Schedule ── -->
+        <div class="form-section-label">Schedule</div>
+
+        <div class="mb-2" id="preset-buttons" style="display:none">
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Quick presets</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8 * * *">08:00 daily</button>
+            <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 8,20 * * *">08:00 &amp; 20:00</button>
+            <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 6,14,22 * * *">6h/14h/22h</button>
+            <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 */4 * * *">Every 4h</button>
+            <button type="button" class="btn-dp btn-dp-ghost" style="font-size:0.72rem;padding:3px 8px" data-cron="0 * * * *">Hourly</button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.schedule_type.id_for_label }}" class="form-label">
+            {{ form.schedule_type.label }}<span class="optional-tag">optional</span>
+          </label>
+          {{ form.schedule_type }}
+          {% if form.schedule_type.errors %}<div class="field-error">✗ {{ form.schedule_type.errors|join:", " }}</div>{% endif %}
+        </div>
+
+        <div id="custom-cron-row" class="mb-4" style="display:none">
+          <label for="{{ form.schedule_cron.id_for_label }}" class="form-label">
+            {{ form.schedule_cron.label }}
+          </label>
+          {{ form.schedule_cron }}
+          {% if form.schedule_cron.help_text %}<div class="form-text">{{ form.schedule_cron.help_text }}</div>{% endif %}
+          {% if form.schedule_cron.errors %}<div class="field-error">✗ {{ form.schedule_cron.errors|join:", " }}</div>{% endif %}
+        </div>
+
+        <!-- ── Notifications ── -->
+        <div class="form-section-label">Notifications</div>
+        <div class="mb-3">
+          <div class="form-check">
+            {{ form.notify_on_fail }}
+            <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
+              Notify me on failure
+            </label>
+          </div>
+          <div class="form-text" style="margin-top:4px">
+            Send an email when this rule returns FAIL or ERROR.
+            Requires your account to have an email address set.
+            Cooldown: at most one email per hour per rule.
+          </div>
+          {% if form.notify_on_fail.errors %}
+            <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <div class="form-check">
+            {{ form.notify_slack }}
+            <label class="form-check-label" for="{{ form.notify_slack.id_for_label }}">
+              Notify via Slack
+            </label>
+          </div>
+          <div class="form-text" style="margin-top:4px">
+            Send a Slack Block Kit message when this rule returns FAIL or ERROR.
+            Requires at least one enabled webhook in
+            <a href="{% url 'monitor:slack_webhook_list' %}" style="color:var(--accent-hover)">Slack Webhooks</a>.
+            Cooldown: at most one message per hour per rule.
+          </div>
+          {% if form.notify_slack.errors %}
+            <div class="field-error">✗ {{ form.notify_slack.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
+        <!-- ── Tags ── -->
+        <div class="form-section-label">Tags <span class="optional-tag">optional</span></div>
+        <div class="mb-2" id="tags-field-group">
+          <div id="tag-chip-container" style="
+            display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+            border:1px solid var(--border); border-radius:6px;
+            padding:6px 8px; background:var(--bg-elevated); min-height:38px;
+            cursor:text;" onclick="document.getElementById('tag-input').focus()">
+            <!-- chips inserted here by JS -->
+            <input type="text" id="tag-input" placeholder="Add tag…" autocomplete="off"
+              style="border:none;outline:none;background:transparent;
+                     font-size:0.85rem;color:var(--text-primary);flex:1;min-width:80px;">
+          </div>
+          <input type="hidden" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}">
+          <div class="form-text">Up to 5 tags. Letters, digits, hyphens. Press Enter or comma to add.</div>
+          {% if form.tags.errors %}
+            <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+
       </div>
-    </div>
+    </details>
 
-    <div class="mb-3">
-      <label for="{{ form.schedule_type.id_for_label }}" class="form-label">
-        {{ form.schedule_type.label }}<span class="optional-tag">optional</span>
-      </label>
-      {{ form.schedule_type }}
-      {% if form.schedule_type.errors %}<div class="field-error">✗ {{ form.schedule_type.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div id="custom-cron-row" class="mb-4" style="display:none">
-      <label for="{{ form.schedule_cron.id_for_label }}" class="form-label">
-        {{ form.schedule_cron.label }}
-      </label>
-      {{ form.schedule_cron }}
-      {% if form.schedule_cron.help_text %}<div class="form-text">{{ form.schedule_cron.help_text }}</div>{% endif %}
-      {% if form.schedule_cron.errors %}<div class="field-error">✗ {{ form.schedule_cron.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <!-- ── Notifications ── -->
-    <div class="form-section-label">Notifications</div>
-    <div class="mb-3">
-      <div class="form-check">
-        {{ form.notify_on_fail }}
-        <label class="form-check-label" for="{{ form.notify_on_fail.id_for_label }}">
-          Notify me on failure
-        </label>
-      </div>
-      <div class="form-text" style="margin-top:4px">
-        Send an email when this rule returns FAIL or ERROR.
-        Requires your account to have an email address set.
-        Cooldown: at most one email per hour per rule.
-      </div>
-      {% if form.notify_on_fail.errors %}
-        <div class="field-error">✗ {{ form.notify_on_fail.errors|join:", " }}</div>
-      {% endif %}
-    </div>
-
-    <div class="mb-4">
-      <div class="form-check">
-        {{ form.notify_slack }}
-        <label class="form-check-label" for="{{ form.notify_slack.id_for_label }}">
-          Notify via Slack
-        </label>
-      </div>
-      <div class="form-text" style="margin-top:4px">
-        Send a Slack Block Kit message when this rule returns FAIL or ERROR.
-        Requires at least one enabled webhook in
-        <a href="{% url 'monitor:slack_webhook_list' %}" style="color:var(--accent-hover)">Slack Webhooks</a>.
-        Cooldown: at most one message per hour per rule.
-      </div>
-      {% if form.notify_slack.errors %}
-        <div class="field-error">✗ {{ form.notify_slack.errors|join:", " }}</div>
-      {% endif %}
-    </div>
-
-    <!-- ── Tags ── -->
-    <div class="form-section-label">Tags <span class="optional-tag">optional</span></div>
-    <div class="mb-4" id="tags-field-group">
-      <div id="tag-chip-container" style="
-        display:flex; flex-wrap:wrap; gap:4px; align-items:center;
-        border:1px solid var(--border); border-radius:6px;
-        padding:6px 8px; background:var(--bg-elevated); min-height:38px;
-        cursor:text;" onclick="document.getElementById('tag-input').focus()">
-        <!-- chips inserted here by JS -->
-        <input type="text" id="tag-input" placeholder="Add tag…" autocomplete="off"
-          style="border:none;outline:none;background:transparent;
-                 font-size:0.85rem;color:var(--text-primary);flex:1;min-width:80px;">
-      </div>
-      <input type="hidden" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}">
-      <div class="form-text">Up to 5 tags. Letters, digits, hyphens. Press Enter or comma to add.</div>
-      {% if form.tags.errors %}
-        <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
-      {% endif %}
-    </div>
-
-    <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
+    <div class="d-flex gap-2 pt-3" style="border-top:1px solid var(--border);margin-top:1rem">
       <button type="submit" class="btn-dp btn-dp-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Save rule
@@ -1415,5 +1529,84 @@
   }
 }());
 {% endif %}{# wizard_mode JS #}
+
+// Section summary hints for non-wizard layout
+(function() {
+  var connSelect  = document.getElementById('id_connection');
+  var schemaInput = document.getElementById('id_schema_name');
+  var tableInput  = document.getElementById('id_table_name');
+  var schedSelect = document.getElementById('id_schedule_type');
+  var hintConn    = document.getElementById('hint-connection');
+  var hintCond    = document.getElementById('hint-conditions');
+  var hintSettings = document.getElementById('hint-settings');
+
+  if (!hintConn && !hintCond && !hintSettings) return;
+
+  function updateConnectionHint() {
+    if (!hintConn) return;
+    var connText = connSelect && connSelect.options[connSelect.selectedIndex]
+      ? connSelect.options[connSelect.selectedIndex].text : '';
+    var schema = schemaInput ? schemaInput.value.trim() : '';
+    var table  = tableInput  ? tableInput.value.trim()  : '';
+    var parts = [];
+    if (connSelect && connSelect.value) parts.push(connText);
+    if (schema && table) parts.push(schema + '.' + table);
+    else if (table) parts.push(table);
+    hintConn.textContent = parts.join(' · ');
+  }
+
+  function updateConditionsHint() {
+    if (!hintCond) return;
+    var ruleTypeEl = document.querySelector('input[name="rule_type"]:checked');
+    var ruleType = ruleTypeEl ? ruleTypeEl.value : 'volume_freshness';
+    if (ruleType === 'custom_sql') {
+      var sqlEl = document.getElementById('id_custom_sql');
+      hintCond.textContent = sqlEl && sqlEl.value.trim() ? 'Custom SQL' : 'Custom SQL — empty';
+    } else {
+      var minRows = document.getElementById('id_min_row_count');
+      var tsCol   = document.getElementById('id_timestamp_column');
+      var maxAge  = document.getElementById('id_max_age_hours');
+      var parts = [];
+      if (minRows && minRows.value.trim()) parts.push('min rows ≥ ' + minRows.value.trim());
+      if (tsCol && tsCol.value.trim() && maxAge && maxAge.value.trim())
+        parts.push('freshness ≤ ' + maxAge.value.trim() + 'h on ' + tsCol.value.trim());
+      hintCond.textContent = parts.length ? parts.join(' · ') : 'Volume / Freshness';
+    }
+  }
+
+  function updateSettingsHint() {
+    if (!hintSettings) return;
+    if (!schedSelect) return;
+    var val = schedSelect.value;
+    var labelMap = {
+      'disabled': 'No schedule',
+      'preset_1x': 'Once daily',
+      'preset_2x': 'Twice daily',
+      'preset_4x': 'Every 6h',
+      'custom_cron': 'Custom cron',
+    };
+    hintSettings.textContent = labelMap[val] || val;
+  }
+
+  function bindAll() {
+    if (connSelect) connSelect.addEventListener('change', updateConnectionHint);
+    if (schemaInput) schemaInput.addEventListener('input', updateConnectionHint);
+    if (tableInput)  tableInput.addEventListener('input', updateConnectionHint);
+    if (schedSelect) schedSelect.addEventListener('change', updateSettingsHint);
+    document.addEventListener('dp:setType', updateConditionsHint);
+    var minRows = document.getElementById('id_min_row_count');
+    var tsCol   = document.getElementById('id_timestamp_column');
+    var maxAge  = document.getElementById('id_max_age_hours');
+    var sqlEl   = document.getElementById('id_custom_sql');
+    [minRows, tsCol, maxAge, sqlEl].forEach(function(el) {
+      if (el) el.addEventListener('input', updateConditionsHint);
+    });
+  }
+
+  bindAll();
+  updateConnectionHint();
+  updateConditionsHint();
+  updateSettingsHint();
+}());
 </script>
 {% endblock %}
