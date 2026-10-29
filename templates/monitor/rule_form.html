@@ -180,8 +180,11 @@
 
 {% if wizard_mode %}
   /* ── Wizard styles (phases 1-4) ─────────────────────────────── */
-  .wizard-step { display: none; }
-  .wizard-step.active { display: block; }
+  /* Hidden steps stay in the DOM so all fields are submitted by the browser.
+     position:absolute + height:0 keeps them invisible without removing them. */
+  #rule-form { position: relative; }
+  .wizard-step { position: absolute; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; }
+  .wizard-step.active { position: relative; visibility: visible; pointer-events: auto; height: auto; overflow: visible; }
 
   /* Progress bar */
   .wizard-progress {

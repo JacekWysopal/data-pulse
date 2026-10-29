@@ -88,7 +88,7 @@ def run_single(request, rule_id):
     if request.method == 'POST':
         result = run_single_rule(rule)
         if result.status == 'OK':
-            messages.success(request, f'✓ {rule.name}: OK')
+            messages.success(request, f'{rule.name}: OK')
         elif result.status == 'FAIL':
             messages.warning(request, f'✗ {rule.name}: FAIL')
         else:
