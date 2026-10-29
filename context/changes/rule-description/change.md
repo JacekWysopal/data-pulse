@@ -1,7 +1,7 @@
 ---
 change_id: rule-description
 title: Rule description field — optional human-readable note per rule
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-28
 archived_at: null

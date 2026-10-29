@@ -1,7 +1,7 @@
 ---
 change_id: rule-wizard
 title: Rule creation wizard — step-by-step 3-step form
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null

@@ -1,7 +1,7 @@
 ---
 change_id: rule-clone
 title: Clone rule — duplicate existing rule with one click
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null

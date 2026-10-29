@@ -1,7 +1,7 @@
 ---
 change_id: rule-tags
 title: Rule tags — filter and group rules by tag labels
-status: preparing
+status: planned
 created: 2026-10-28
 updated: 2026-10-29
 archived_at: null
