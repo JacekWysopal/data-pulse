@@ -1,8 +1,29 @@
 import json
 from croniter import croniter
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 
 from .models import Connection, DbtIntegration, Rule, SlackWebhook
+
+User = get_user_model()
+
+
+class SignupForm(UserCreationForm):
+    """Registration form that requires an email address in addition to username and password."""
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'you@example.com',
+        }),
+        label='Email',
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('username', 'email', 'password1', 'password2')
 
 
 class ConnectionForm(forms.ModelForm):

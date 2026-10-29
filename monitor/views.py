@@ -6,14 +6,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
+from .forms import ConnectionForm, DbtIntegrationForm, RuleForm, SignupForm, SlackWebhookForm
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .check_templates import TEMPLATES as CHECK_TEMPLATES
-from .forms import ConnectionForm, DbtIntegrationForm, RuleForm, SlackWebhookForm
 from .models import ApiKey, CheckRun, Connection, DbtIntegration, Rule, RuleResult, SlackWebhook, UserProfile
 from .schedule_utils import get_next_run
 from .services import get_schema_columns, get_schema_tables, run_all_checks, run_checks_for_user, run_single_rule
@@ -26,13 +25,13 @@ def signup(request):
     if request.user.is_authenticated:
         return redirect('monitor:dashboard')
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = SignupForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request, user)
             return redirect(settings.LOGIN_REDIRECT_URL)
     else:
-        form = UserCreationForm()
+        form = SignupForm()
     return render(request, 'signup.html', {'form': form})
 
 

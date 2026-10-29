@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 {% load static %}
 <head>
   <meta charset="UTF-8">
@@ -238,12 +238,12 @@
 
   <div class="login-card">
     <div class="login-title">Sign in</div>
-    <div class="login-sub">PostgreSQL data quality monitoring</div>
+    <div class="login-sub">Database quality monitoring for data teams</div>
 
     {% if form.errors %}
     <div class="login-error">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M7 4.5v3M7 9.5v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      Nieprawidłowy login lub hasło.
+      Incorrect username or password.
     </div>
     {% endif %}
 
@@ -254,7 +254,7 @@
         <input type="text" name="username" id="id_username" autocomplete="username" autofocus placeholder="user@datapulse">
       </div>
       <div class="field-group">
-        <label for="id_password">Hasło</label>
+        <label for="id_password">Password</label>
         <input type="password" name="password" id="id_password" autocomplete="current-password" placeholder="••••••••">
       </div>
       <input type="hidden" name="next" value="{{ next }}">

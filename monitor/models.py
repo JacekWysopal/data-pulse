@@ -82,7 +82,7 @@ class Connection(models.Model):
 
 
 class Rule(models.Model):
-    """Monitoring rule for one PostgreSQL table."""
+    """Monitoring rule for one database table (PostgreSQL or MySQL)."""
 
     class RuleType(models.TextChoices):
         VOLUME_FRESHNESS = 'volume_freshness', 'Volume / Freshness'
