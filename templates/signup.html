@@ -157,7 +157,8 @@
     }
 
     input[type="text"],
-    input[type="password"] {
+    input[type="password"],
+    input[type="email"] {
       width: 100%;
       background: var(--bg-input);
       border: 1px solid var(--border-strong);
@@ -257,7 +258,7 @@
 
   <div class="login-card">
     <div class="login-title">Create your account</div>
-    <div class="login-sub">PostgreSQL data quality monitoring</div>
+    <div class="login-sub">Database quality monitoring for data teams</div>
 
     <form method="post" action="{% url 'signup' %}">
       {% csrf_token %}
