@@ -402,6 +402,10 @@
       {% for item in rule_status %}{% if item.rule.connection %}{% ifchanged item.rule.connection.pk %}<option value="{{ item.rule.connection.pk }}">{{ item.rule.connection.name }}</option>{% endifchanged %}{% endif %}{% endfor %}
     </select>
 
+    <select class="filter-select" id="f-tag">
+      <option value="">All tags</option>
+    </select>
+
     <button class="filter-clear" id="f-clear" style="display:none">✕ Clear</button>
     <span class="filter-active-count" id="f-count" style="display:none">0</span>
   </div>
@@ -424,13 +428,21 @@
         <tr class="{% if item.status == 'OK' %}row-ok{% elif item.status == 'FAIL' %}row-fail{% elif item.status == 'ERROR' %}row-error{% endif %}"
             data-name="{{ item.rule.name|lower }}"
             data-status="{{ item.status }}"
-            data-conn="{% if item.rule.connection %}{{ item.rule.connection.pk }}{% else %}__env__{% endif %}">
+            data-conn="{% if item.rule.connection %}{{ item.rule.connection.pk }}{% else %}__env__{% endif %}"
+            data-tags="{{ item.rule.tags }}">
 
           <td>
             <a href="{% url 'monitor:rule_history' item.rule.pk %}" class="rule-link">
               <span class="rule-link-dot"></span>
               {{ item.rule.name }}
             </a>
+            {% if item.rule.tags_list %}
+            <div style="margin-top:3px">
+              {% for tag in item.rule.tags_list %}
+              <span class="cond-pill" style="color:var(--accent-hover);border-color:rgba(99,102,241,0.25);background:var(--accent-dim)">{{ tag }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
           </td>
 
           <!-- S-08: connection badge -->
@@ -552,6 +564,7 @@
   const fName     = document.getElementById('f-name');
   const fStatus   = document.getElementById('f-status');
   const fConn     = document.getElementById('f-conn');
+  const fTag      = document.getElementById('f-tag');
   const fClear    = document.getElementById('f-clear');
   const fCount    = document.getElementById('f-count');
   const noResults = document.getElementById('no-results-row');
@@ -564,17 +577,37 @@
   if (params.get('status')) fStatus.value = params.get('status');
   if (params.get('conn'))   fConn.value   = params.get('conn');
 
+  // Populate #f-tag from data-tags attributes
+  (function() {
+    const tagSet = new Set();
+    rows.forEach(row => {
+      (row.dataset.tags || '').split(',').forEach(t => {
+        const trimmed = t.trim();
+        if (trimmed) tagSet.add(trimmed);
+      });
+    });
+    Array.from(tagSet).sort().forEach(tag => {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = tag;
+      fTag.appendChild(opt);
+    });
+    if (params.get('tag')) fTag.value = params.get('tag');
+  }());
+
   function applyFilters() {
     const q      = fName.value.trim().toLowerCase();
     const status = fStatus.value;
     const conn   = fConn.value;
+    const tag    = fTag.value;
     let visible  = 0;
 
     rows.forEach(row => {
       const nameMatch   = !q      || row.dataset.name.includes(q);
       const statusMatch = !status || row.dataset.status === status;
       const connMatch   = !conn   || row.dataset.conn === conn;
-      const show = nameMatch && statusMatch && connMatch;
+      const tagMatch    = !tag    || (row.dataset.tags || '').split(',').map(s => s.trim()).includes(tag);
+      const show = nameMatch && statusMatch && connMatch && tagMatch;
       row.style.display = show ? '' : 'none';
       if (show) visible++;
     });
@@ -582,7 +615,7 @@
     if (noResults) noResults.style.display = visible === 0 ? '' : 'none';
 
     // Active count badge
-    const active = [q, status, conn].filter(Boolean).length;
+    const active = [q, status, conn, tag].filter(Boolean).length;
     fCount.textContent = active;
     fCount.style.display = active > 0 ? '' : 'none';
     fClear.style.display = active > 0 ? '' : 'none';
@@ -592,6 +625,7 @@
     if (q)      p.set('q', q);
     if (status) p.set('status', status);
     if (conn)   p.set('conn', conn);
+    if (tag)    p.set('tag', tag);
     const newUrl = p.toString() ? '?' + p.toString() : location.pathname;
     history.replaceState(null, '', newUrl);
   }
@@ -599,8 +633,9 @@
   fName.addEventListener('input', applyFilters);
   fStatus.addEventListener('change', applyFilters);
   fConn.addEventListener('change', applyFilters);
+  fTag.addEventListener('change', applyFilters);
   fClear.addEventListener('click', () => {
-    fName.value = fStatus.value = fConn.value = '';
+    fName.value = fStatus.value = fConn.value = fTag.value = '';
     applyFilters();
   });
 

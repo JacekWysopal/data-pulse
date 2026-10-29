@@ -56,7 +56,7 @@ class ConnectionForm(forms.ModelForm):
 class RuleForm(forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ['name', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail', 'notify_slack']
+        fields = ['name', 'description', 'schema_name', 'table_name', 'connection', 'rule_type', 'custom_sql', 'timestamp_column', 'max_age_hours', 'min_row_count', 'schedule_type', 'schedule_cron', 'notify_on_fail', 'notify_slack', 'severity', 'tags']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'schema_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'public'}),
@@ -80,6 +80,12 @@ class RuleForm(forms.ModelForm):
             }),
             'notify_on_fail': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'notify_slack': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'severity': forms.Select(attrs={'class': 'form-select'}),
+            'tags': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. production, finance',
+                'autocomplete': 'off',
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -117,6 +123,24 @@ class RuleForm(forms.ModelForm):
                     'Invalid cron expression. Use 5-field format, e.g. 0 8 * * *.'
                 )
         return schedule_cron
+
+    def clean_tags(self):
+        import re
+        raw = (self.cleaned_data.get('tags') or '').strip()
+        if not raw:
+            return ''
+        parts = [t.strip().lower() for t in raw.split(',') if t.strip()]
+        if len(parts) > 5:
+            raise forms.ValidationError('Maximum 5 tags allowed.')
+        for tag in parts:
+            if len(tag) > 30:
+                raise forms.ValidationError(
+                    f'Tag "{tag}" exceeds 30 characters.')
+            if not re.match(r'^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$', tag):
+                raise forms.ValidationError(
+                    f'Tag "{tag}" is invalid. Use lowercase letters, digits, and hyphens only; '
+                    'must start and end with a letter or digit.')
+        return ','.join(parts)
 
     def clean(self):
         cleaned = super().clean()

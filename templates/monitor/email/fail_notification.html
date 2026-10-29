@@ -75,6 +75,13 @@
                   <td style="padding:10px 16px;font-size:0.78rem;color:#f87171;font-family:monospace">{{ result.error_message }}</td>
                 </tr>
                 {% endif %}
+
+                {% if rule.description %}
+                <tr>
+                  <td style="padding:10px 12px;font-size:0.8rem;color:#94a3b8;font-weight:600">Note</td>
+                  <td style="padding:10px 12px;font-size:0.8rem;color:#e2e8f0">{{ rule.description }}</td>
+                </tr>
+                {% endif %}
               </table>
             </td>
           </tr>

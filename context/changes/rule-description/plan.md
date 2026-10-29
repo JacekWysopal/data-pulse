@@ -441,8 +441,8 @@ Migration `0018_rule_description` adds one nullable-equivalent column (`TextFiel
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly (migrate --check exits 0)
-- [ ] 1.2 Rule.description accessible with empty-string default on new instance
+- [x] 1.1 Migration applies cleanly (migrate --check exits 0)
+- [x] 1.2 Rule.description accessible with empty-string default on new instance
 
 #### Manual
 
@@ -452,10 +452,10 @@ Migration `0018_rule_description` adds one nullable-equivalent column (`TextFiel
 
 #### Automated
 
-- [ ] 2.1 RuleForm instantiates with description in fields
-- [ ] 2.2 Form save with description='Test note' persists to DB
-- [ ] 2.3 Form save with description='' persists empty string
-- [ ] 2.4 Form validation rejects description longer than 500 chars
+- [x] 2.1 RuleForm instantiates with description in fields
+- [x] 2.2 Form save with description='Test note' persists to DB
+- [x] 2.3 Form save with description='' persists empty string
+- [x] 2.4 Form validation rejects description longer than 500 chars
 
 #### Manual
 
@@ -466,9 +466,9 @@ Migration `0018_rule_description` adds one nullable-equivalent column (`TextFiel
 
 #### Automated
 
-- [ ] 3.1 Dashboard template renders without errors when description is non-empty
-- [ ] 3.2 Dashboard template renders without errors when description is empty
-- [ ] 3.3 truncatechars:80 applied in dashboard (verified via rendered HTML)
+- [x] 3.1 Dashboard template renders without errors when description is non-empty
+- [x] 3.2 Dashboard template renders without errors when description is empty
+- [x] 3.3 truncatechars:80 applied in dashboard (verified via rendered HTML)
 
 #### Manual
 
@@ -479,12 +479,12 @@ Migration `0018_rule_description` adds one nullable-equivalent column (`TextFiel
 
 #### Automated
 
-- [ ] 4.1 Fail email body includes 'Note:' and description when rule.description is set
-- [ ] 4.2 Fail email body excludes 'Note:' when rule.description is blank
-- [ ] 4.3 Digest email body includes description per result when set
-- [ ] 4.4 Slack payload includes *Note* field when description is non-empty
-- [ ] 4.5 Slack payload excludes *Note* field when description is blank
-- [ ] 4.6 All existing notification tests pass unchanged
+- [x] 4.1 Fail email body includes 'Note:' and description when rule.description is set
+- [x] 4.2 Fail email body excludes 'Note:' when rule.description is blank
+- [x] 4.3 Digest email body includes description per result when set
+- [x] 4.4 Slack payload includes *Note* field when description is non-empty
+- [x] 4.5 Slack payload excludes *Note* field when description is blank
+- [x] 4.6 All existing notification tests pass unchanged
 
 #### Manual
 
@@ -494,9 +494,9 @@ Migration `0018_rule_description` adds one nullable-equivalent column (`TextFiel
 
 #### Automated
 
-- [ ] 5.1 All new tests pass: python manage.py test monitor --verbosity=2
-- [ ] 5.2 No regressions in existing test suite
-- [ ] 5.3 Test count increases by at least 8
+- [x] 5.1 All new tests pass: python manage.py test monitor --verbosity=2
+- [x] 5.2 No regressions in existing test suite
+- [x] 5.3 Test count increases by at least 8
 
 #### Manual
 

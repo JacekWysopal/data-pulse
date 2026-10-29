@@ -143,6 +143,21 @@ def notify_rule_result(rule: Rule, result) -> dict:
 
     Returns {'email': bool, 'slack': bool}.
     """
+    # INFO: log only, never notify
+    if rule.severity == Rule.Severity.INFO:
+        logger.debug(
+            'Skipping notification for INFO rule %s (pk=%s)', rule.name, rule.pk
+        )
+        return {'email': False, 'slack': False}
+
+    # WARNING: defer until 3 consecutive failures
+    if rule.severity == Rule.Severity.WARNING and rule.consecutive_fails < 3:
+        logger.debug(
+            'Deferring WARNING notification for rule %s (pk=%s): consecutive_fails=%s',
+            rule.name, rule.pk, rule.consecutive_fails,
+        )
+        return {'email': False, 'slack': False}
+
     email_sent = send_fail_notification(rule, result)
     slack_sent = send_slack_notification(rule, result)
     return {'email': email_sent, 'slack': slack_sent}

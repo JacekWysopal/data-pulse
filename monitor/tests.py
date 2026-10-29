@@ -4008,3 +4008,384 @@ class ApiKeyViewTest(TestCase):
         self.assertEqual(r.status_code, 404)
         key.refresh_from_db()
         self.assertTrue(key.is_active)  # unchanged
+
+
+# =============================================================================
+#  Live Preview - service unit tests (rule-live-preview)
+# =============================================================================
+
+class PreviewRuleServiceTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('preview_svc_user', password='pass')
+        self.conn = make_connection(name='preview_conn', url='postgresql://u:p@host/db', user=self.user)
+
+    def _ok_result(self, sample_rows=None):
+        return {
+            'status': 'OK',
+            'row_count': 50,
+            'last_record_age_hours': None,
+            'error_message': '',
+            'sample_rows': sample_rows,
+        }
+
+    @patch('monitor.services._open_conn')
+    @patch('monitor.services._check_rule')
+    def test_volume_freshness_preview_ok(self, mock_check, mock_open):
+        mock_open.return_value = MagicMock()
+        mock_check.return_value = self._ok_result()
+
+        from .services import preview_rule
+        result = preview_rule({
+            'connection_id': self.conn.pk,
+            'rule_type': 'volume_freshness',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'min_row_count': 1,
+        }, self.user)
+
+        self.assertEqual(result['status'], 'OK')
+        self.assertEqual(result['row_count'], 50)
+        mock_open.assert_called_once()
+        mock_check.assert_called_once()
+
+    @patch('monitor.services._open_conn')
+    @patch('monitor.services._check_rule')
+    def test_custom_sql_preview_ok(self, mock_check, mock_open):
+        mock_open.return_value = MagicMock()
+        mock_check.return_value = self._ok_result()
+
+        from .services import preview_rule
+        result = preview_rule({
+            'connection_id': self.conn.pk,
+            'rule_type': 'custom_sql',
+            'custom_sql': 'SELECT true',
+        }, self.user)
+
+        self.assertEqual(result['status'], 'OK')
+
+    def test_unknown_connection_id_returns_error(self):
+        from .services import preview_rule
+        result = preview_rule({'connection_id': 99999, 'rule_type': 'volume_freshness'}, self.user)
+        self.assertEqual(result['status'], 'ERROR')
+        self.assertIn('Connection not found', result['error_message'])
+
+    def test_wrong_owner_returns_error(self):
+        other_user = User.objects.create_user('preview_other', password='pass')
+        from .services import preview_rule
+        result = preview_rule({'connection_id': self.conn.pk, 'rule_type': 'volume_freshness'}, other_user)
+        self.assertEqual(result['status'], 'ERROR')
+        self.assertIn('Connection not found', result['error_message'])
+
+    @patch('monitor.services._open_conn')
+    def test_empty_url_returns_error(self, mock_open):
+        empty_conn = Connection(name='empty_url_conn', user=self.user)
+        empty_conn._database_url = ''
+        empty_conn.save()
+
+        from .services import preview_rule
+        result = preview_rule({'connection_id': empty_conn.pk, 'rule_type': 'volume_freshness'}, self.user)
+        self.assertEqual(result['status'], 'ERROR')
+        self.assertIn('empty', result['error_message'].lower())
+        mock_open.assert_not_called()
+
+    @patch('monitor.services._open_conn')
+    def test_monitored_db_error_returns_error(self, mock_open):
+        from .services import preview_rule, MonitoredDbError
+        mock_open.side_effect = MonitoredDbError('connection refused')
+
+        result = preview_rule({
+            'connection_id': self.conn.pk,
+            'rule_type': 'volume_freshness',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'min_row_count': 1,
+        }, self.user)
+
+        self.assertEqual(result['status'], 'ERROR')
+        self.assertIn('connection refused', result['error_message'])
+
+    @patch('monitor.services._open_conn')
+    @patch('monitor.services._check_rule')
+    def test_sample_rows_sliced_to_three(self, mock_check, mock_open):
+        mock_open.return_value = MagicMock()
+        five_rows = [{'id': i} for i in range(5)]
+        mock_check.return_value = self._ok_result(sample_rows=five_rows)
+
+        from .services import preview_rule
+        result = preview_rule({
+            'connection_id': self.conn.pk,
+            'rule_type': 'volume_freshness',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'min_row_count': 1,
+        }, self.user)
+
+        self.assertIsNotNone(result['sample_rows'])
+        self.assertEqual(len(result['sample_rows']), 3)
+
+    @patch('monitor.services._open_conn')
+    @patch('monitor.services._check_rule')
+    def test_no_db_writes(self, mock_check, mock_open):
+        mock_open.return_value = MagicMock()
+        mock_check.return_value = self._ok_result()
+
+        run_count_before = CheckRun.objects.count()
+        result_count_before = RuleResult.objects.count()
+
+        from .services import preview_rule
+        preview_rule({
+            'connection_id': self.conn.pk,
+            'rule_type': 'volume_freshness',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'min_row_count': 1,
+        }, self.user)
+
+        self.assertEqual(CheckRun.objects.count(), run_count_before)
+        self.assertEqual(RuleResult.objects.count(), result_count_before)
+
+
+# =============================================================================
+#  Live Preview - endpoint integration tests (rule-live-preview)
+# =============================================================================
+
+class PreviewRuleViewTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user('preview_view_user', password='pass')
+        self.conn = make_connection(name='preview_view_conn', url='postgresql://u:p@host/db', user=self.user)
+        self.url = '/api/preview/'
+        self._ok_payload = {
+            'status': 'OK',
+            'row_count': 50,
+            'last_record_age_hours': None,
+            'error_message': '',
+            'sample_rows': None,
+        }
+
+    def test_unauthenticated_redirects_to_login(self):
+        r = self.client.post(
+            self.url,
+            data=json.dumps({'connection_id': self.conn.pk}),
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login/', r['Location'])
+
+    def test_missing_connection_id_returns_400(self):
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.post(
+            self.url,
+            data=json.dumps({'rule_type': 'volume_freshness'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 400)
+        data = json.loads(r.content)
+        self.assertIn('connection_id', data.get('error', ''))
+
+    def test_non_integer_connection_id_returns_400(self):
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.post(
+            self.url,
+            data=json.dumps({'connection_id': 'not-an-int'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_invalid_json_returns_400(self):
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.post(
+            self.url,
+            data='not valid json',
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 400)
+        data = json.loads(r.content)
+        self.assertIn('Invalid JSON', data.get('error', ''))
+
+    @patch('monitor.views.preview_rule')
+    def test_valid_request_returns_200_with_expected_keys(self, mock_preview):
+        mock_preview.return_value = self._ok_payload
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.post(
+            self.url,
+            data=json.dumps({
+                'connection_id': self.conn.pk,
+                'rule_type': 'volume_freshness',
+                'schema_name': 'public',
+                'table_name': 'orders',
+                'min_row_count': 1,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        for key in ('status', 'row_count', 'last_record_age_hours', 'error_message', 'sample_rows'):
+            self.assertIn(key, data)
+
+    def test_other_users_connection_returns_200_with_error_status(self):
+        other_user = User.objects.create_user('preview_other_view', password='pass')
+        other_conn = make_connection(name='other_conn_view', url='postgresql://u:p@h/db', user=other_user)
+
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.post(
+            self.url,
+            data=json.dumps({'connection_id': other_conn.pk, 'rule_type': 'volume_freshness'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        self.assertEqual(data['status'], 'ERROR')
+
+    def test_get_method_not_allowed(self):
+        self.client.login(username='preview_view_user', password='pass')
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 405)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Rule Tags tests (Phase 5 — change: rule-tags)
+# ═══════════════════════════════════════════════════════════════
+
+class RuleTagsModelTests(TestCase):
+    """Rule.tags field and tags_list property."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('tags_model_user', password='pass')
+
+    def test_tags_default_empty_string(self):
+        rule = make_rule(name='tags_default', min_rows=1, user=self.user)
+        self.assertEqual(rule.tags, '')
+
+    def test_tags_list_empty_when_no_tags(self):
+        rule = make_rule(name='tags_empty', min_rows=1, user=self.user)
+        self.assertEqual(rule.tags_list, [])
+
+    def test_tags_list_returns_normalised_list(self):
+        rule = make_rule(name='tags_norm', min_rows=1, user=self.user)
+        rule.tags = 'production,finance'
+        rule.save()
+        self.assertEqual(rule.tags_list, ['production', 'finance'])
+
+    def test_tags_list_ignores_empty_segments(self):
+        rule = make_rule(name='tags_empty_seg', min_rows=1, user=self.user)
+        rule.tags = ',production,'
+        rule.save()
+        self.assertEqual(rule.tags_list, ['production'])
+
+    def test_tags_do_not_affect_check_constraint(self):
+        """Setting tags on a valid rule must not raise IntegrityError."""
+        rule = make_rule(name='tags_constraint', min_rows=1, user=self.user)
+        rule.tags = 'finance,orders'
+        rule.save()
+        rule.refresh_from_db()
+        self.assertEqual(rule.tags, 'finance,orders')
+
+
+class RuleTagsFormTests(TestCase):
+    """RuleForm.clean_tags() validation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('tags_form_user', password='pass')
+        self.conn = Connection.objects.create(name='tags-conn', user=self.user)
+        self.conn.set_database_url('postgresql://user:pass@host/db')
+        self.conn.save()
+
+    def _form(self, tags_value):
+        from .forms import RuleForm
+        data = {
+            'name': 'test',
+            'schema_name': 'public',
+            'table_name': 'orders',
+            'connection': self.conn.pk,
+            'min_row_count': 1,
+            'rule_type': 'volume_freshness',
+            'severity': 'critical',
+            'tags': tags_value,
+        }
+        return RuleForm(data, user=self.user)
+
+    def test_valid_single_tag(self):
+        form = self._form('production')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tags'], 'production')
+
+    def test_valid_multi_tag_normalised(self):
+        form = self._form('Production, Finance')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tags'], 'production,finance')
+
+    def test_five_tags_valid(self):
+        form = self._form('a,b,c,d,e')
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_six_tags_invalid(self):
+        form = self._form('a,b,c,d,e,f')
+        self.assertFalse(form.is_valid())
+        self.assertIn('tags', form.errors)
+
+    def test_invalid_char_rejected(self):
+        form = self._form('Finance!')
+        self.assertFalse(form.is_valid())
+        self.assertIn('tags', form.errors)
+
+    def test_hyphen_mid_tag_valid(self):
+        form = self._form('a-b')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tags'], 'a-b')
+
+    def test_leading_hyphen_invalid(self):
+        form = self._form('-tag')
+        self.assertFalse(form.is_valid())
+        self.assertIn('tags', form.errors)
+
+    def test_tag_length_30_valid(self):
+        form = self._form('a' * 30)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_tag_length_31_invalid(self):
+        form = self._form('a' * 31)
+        self.assertFalse(form.is_valid())
+        self.assertIn('tags', form.errors)
+
+    def test_empty_tags_cleaned_to_empty_string(self):
+        form = self._form('')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tags'], '')
+
+
+class RuleTagsDashboardTests(TestCase):
+    """Dashboard renders data-tags attribute and tag pills."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('tags_dash_user', password='pass')
+        self.client.login(username='tags_dash_user', password='pass')
+        self.rule_with_tags = make_rule(
+            name='tagged_rule',
+            min_rows=1,
+            user=self.user,
+        )
+        self.rule_with_tags.tags = 'production,finance'
+        self.rule_with_tags.save()
+        self.rule_no_tags = make_rule(
+            name='untagged_rule',
+            min_rows=1,
+            user=self.user,
+        )
+
+    def test_data_tags_attribute_rendered(self):
+        r = self.client.get(reverse('monitor:dashboard'))
+        self.assertContains(r, 'data-tags="production,finance"')
+
+    def test_tag_pills_rendered_for_tagged_rule(self):
+        r = self.client.get(reverse('monitor:dashboard'))
+        self.assertContains(r, '>production<')
+        self.assertContains(r, '>finance<')
+
+    def test_no_tag_div_for_untagged_rule(self):
+        """A rule with empty tags must not produce a tags wrapper div in its cell."""
+        r = self.client.get(reverse('monitor:dashboard'))
+        content = r.content.decode()
+        # The untagged rule row should have data-tags="" (empty)
+        self.assertIn('data-tags=""', content)

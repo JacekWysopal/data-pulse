@@ -71,6 +71,15 @@ def send_slack_notification(rule: Rule, result) -> bool:
     elif rule.max_age_hours is not None:
         threshold_str = f'≤ {rule.max_age_hours} h age'
 
+    fields = [
+                {'type': 'mrkdwn', 'text': f'*Rule*\n{rule.name}'},
+                {'type': 'mrkdwn', 'text': f'*Status*\n{result.status}'},
+                {'type': 'mrkdwn', 'text': f'*Measured*\n{measured_str}'},
+                {'type': 'mrkdwn', 'text': f'*Threshold*\n{threshold_str}'},
+            ]
+    if rule.description:
+        fields.append({'type': 'mrkdwn', 'text': f'*Note*\n{rule.description}'})
+
     blocks = [
         {
             'type': 'section',
@@ -84,12 +93,7 @@ def send_slack_notification(rule: Rule, result) -> bool:
         },
         {
             'type': 'section',
-            'fields': [
-                {'type': 'mrkdwn', 'text': f'*Rule*\n{rule.name}'},
-                {'type': 'mrkdwn', 'text': f'*Status*\n{result.status}'},
-                {'type': 'mrkdwn', 'text': f'*Measured*\n{measured_str}'},
-                {'type': 'mrkdwn', 'text': f'*Threshold*\n{threshold_str}'},
-            ],
+            'fields': fields,
         },
     ]
 

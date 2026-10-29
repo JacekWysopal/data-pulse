@@ -189,6 +189,39 @@ class Rule(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    description = models.TextField(
+        blank=True,
+        default='',
+        max_length=500,
+        verbose_name='Description',
+        help_text='Optional note explaining why this rule exists.',
+    )
+
+    class Severity(models.TextChoices):
+        CRITICAL = 'critical', 'Critical'
+        WARNING  = 'warning',  'Warning'
+        INFO     = 'info',     'Info'
+
+    severity = models.CharField(
+        max_length=20,
+        choices=Severity.choices,
+        default=Severity.CRITICAL,
+        verbose_name='Severity',
+    )
+    consecutive_fails = models.IntegerField(
+        default=0,
+        verbose_name='Consecutive failures',
+        help_text='Incremented on each FAIL/ERROR result; reset to 0 on OK. Used for WARNING threshold.',
+    )
+
+    tags = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='Tags',
+        help_text='Comma-separated labels, e.g. production, finance',
+    )
+
     class Meta:
         ordering = ['schema_name', 'table_name', 'name']
         constraints = [
@@ -218,6 +251,11 @@ class Rule(models.Model):
     @property
     def last_result(self):
         return self.results.order_by('-checked_at').first()
+
+    @property
+    def tags_list(self):
+        """Return list of normalised tag strings; empty list when no tags."""
+        return [t.strip() for t in self.tags.split(',') if t.strip()]
 
 
 class CheckRun(models.Model):

@@ -8,11 +8,13 @@ Rules without a Connection assigned will return ERROR status.
 import datetime
 import decimal
 import re
+import types
 from urllib.parse import urlparse
 
 import psycopg2
 import pymysql
 import pymysql.err
+from django.db import models
 from django.utils import timezone
 
 from .email_service import notify_rule_result, send_digest_notification
@@ -27,6 +29,18 @@ def _get_notification_mode(user) -> str:
         return user.profile.notification_mode
     except Exception:
         return 'immediate'
+
+
+def _update_consecutive_fails(rule: Rule, result: RuleResult) -> None:
+    """Increment consecutive_fails on FAIL/ERROR, reset to 0 on OK."""
+    if result.status == RuleResult.Status.OK:
+        Rule.objects.filter(pk=rule.pk).update(consecutive_fails=0)
+        rule.consecutive_fails = 0
+    elif result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
+        Rule.objects.filter(pk=rule.pk).update(
+            consecutive_fails=models.F('consecutive_fails') + 1
+        )
+        rule.refresh_from_db(fields=['consecutive_fails'])
 
 
 class MonitoredDbError(Exception):
@@ -360,6 +374,71 @@ def _check_volume_freshness(conn, rule: Rule, provider: str = 'postgresql') -> d
     return result
 
 
+def preview_rule(params: dict, user) -> dict:
+    """Run rule logic against the given connection without persisting anything.
+
+    params keys (all optional except connection_id):
+        connection_id    int
+        rule_type        str  ('volume_freshness' | 'custom_sql')
+        schema_name      str
+        table_name       str
+        custom_sql       str
+        min_row_count    int | None
+        timestamp_column str
+        max_age_hours    int | None
+
+    Returns a dict:
+        status                  str  (RuleResult.Status value)
+        row_count               int | None
+        last_record_age_hours   float | None
+        error_message           str
+        sample_rows             list | None   (at most 3 entries)
+    """
+    error_result = {
+        'status': RuleResult.Status.ERROR,
+        'row_count': None,
+        'last_record_age_hours': None,
+        'error_message': '',
+        'sample_rows': None,
+    }
+
+    connection_id = params.get('connection_id')
+    try:
+        conn_obj = Connection.objects.get(pk=connection_id, user=user)
+    except Connection.DoesNotExist:
+        return {**error_result, 'error_message': 'Connection not found or access denied.'}
+
+    url = conn_obj.get_database_url()
+    if not url:
+        return {**error_result, 'error_message': 'Connection URL is empty.'}
+
+    provider = conn_obj.provider
+
+    # Build a transient Rule-like namespace satisfying _check_rule's interface
+    rule_ns = types.SimpleNamespace(
+        rule_type=params.get('rule_type', Rule.RuleType.VOLUME_FRESHNESS),
+        schema_name=params.get('schema_name', ''),
+        table_name=params.get('table_name', ''),
+        custom_sql=params.get('custom_sql', ''),
+        min_row_count=params.get('min_row_count'),
+        timestamp_column=params.get('timestamp_column', ''),
+        max_age_hours=params.get('max_age_hours'),
+    )
+
+    try:
+        conn = _open_conn(url, provider)
+        result = _check_rule(conn, rule_ns, provider)
+        conn.close()
+    except MonitoredDbError as e:
+        return {**error_result, 'error_message': str(e)}
+
+    # Limit sample rows to 3 for the preview
+    if result.get('sample_rows'):
+        result['sample_rows'] = result['sample_rows'][:3]
+
+    return result
+
+
 def run_single_rule(rule: Rule) -> RuleResult:
     """Run one rule and return its RuleResult (inside a fresh CheckRun)."""
     run = CheckRun.objects.create()
@@ -370,6 +449,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                 status=RuleResult.Status.ERROR,
                 error_message='No connection assigned. Add a Connection in the Connections page and assign it to this rule.',
             )
+            _update_consecutive_fails(rule, result)
             if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                 notify_rule_result(rule, result)
         else:
@@ -381,6 +461,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty. Edit the connection and provide a valid database URL.',
                 )
+                _update_consecutive_fails(rule, result)
                 if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     notify_rule_result(rule, result)
             else:
@@ -396,6 +477,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                         error_message=data['error_message'],
                         sample_rows=data.get('sample_rows'),
                     )
+                    _update_consecutive_fails(rule, result)
                     if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                         notify_rule_result(rule, result)
                 except MonitoredDbError as e:
@@ -404,6 +486,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
                         status=RuleResult.Status.ERROR,
                         error_message=str(e),
                     )
+                    _update_consecutive_fails(rule, result)
                     if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                         notify_rule_result(rule, result)
     except Exception as e:
@@ -412,6 +495,7 @@ def run_single_rule(rule: Rule) -> RuleResult:
             status=RuleResult.Status.ERROR,
             error_message=str(e),
         )
+        _update_consecutive_fails(rule, result)
         if result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
             notify_rule_result(rule, result)
 
@@ -443,10 +527,11 @@ def run_checks_for_user(user) -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message='No connection assigned. Add a Connection and assign it to this rule.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         failing_results.append(db_result)
                 continue
 
@@ -458,10 +543,11 @@ def run_checks_for_user(user) -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         failing_results.append(db_result)
                 continue
 
@@ -479,10 +565,11 @@ def run_checks_for_user(user) -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message=conn_error or 'Connection failed.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         failing_results.append(db_result)
             else:
                 result = _check_rule(conn, rule, provider)
@@ -494,10 +581,11 @@ def run_checks_for_user(user) -> CheckRun:
                     error_message=result['error_message'],
                     sample_rows=result.get('sample_rows'),
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         failing_results.append(db_result)
 
         except Exception as e:
@@ -544,10 +632,11 @@ def run_all_checks() -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message='No connection assigned. Add a Connection and assign it to this rule.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         uid = rule.user_id
                         if uid not in digest_pending:
                             digest_pending[uid] = (rule.user, [])
@@ -562,10 +651,11 @@ def run_all_checks() -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message='Connection URL is empty.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         uid = rule.user_id
                         if uid not in digest_pending:
                             digest_pending[uid] = (rule.user, [])
@@ -586,10 +676,11 @@ def run_all_checks() -> CheckRun:
                     status=RuleResult.Status.ERROR,
                     error_message=conn_error or 'Connection failed.',
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         uid = rule.user_id
                         if uid not in digest_pending:
                             digest_pending[uid] = (rule.user, [])
@@ -604,10 +695,11 @@ def run_all_checks() -> CheckRun:
                     error_message=result['error_message'],
                     sample_rows=result.get('sample_rows'),
                 )
+                _update_consecutive_fails(rule, db_result)
                 if db_result.status in (RuleResult.Status.FAIL, RuleResult.Status.ERROR):
                     if mode == 'immediate':
                         notify_rule_result(rule, db_result)
-                    elif rule.notify_on_fail:
+                    elif rule.notify_on_fail and rule.severity != Rule.Severity.INFO:
                         uid = rule.user_id
                         if uid not in digest_pending:
                             digest_pending[uid] = (rule.user, [])

@@ -432,10 +432,10 @@ Add unit tests covering the three notification-routing branches in `notify_rule_
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly: `python manage.py migrate`
-- [ ] 1.2 Migration is reversible to 0017 and re-applies: `python manage.py migrate monitor 0017` then `migrate`
-- [ ] 1.3 Model introspection shows both new fields
-- [ ] 1.4 Existing test suite passes: `python manage.py test monitor`
+- [x] 1.1 Migration applies cleanly: `python manage.py migrate`
+- [x] 1.2 Migration is reversible to 0017 and re-applies: `python manage.py migrate monitor 0017` then `migrate`
+- [x] 1.3 Model introspection shows both new fields
+- [x] 1.4 Existing test suite passes: `python manage.py test monitor`
 
 #### Manual
 
@@ -446,11 +446,11 @@ Add unit tests covering the three notification-routing branches in `notify_rule_
 
 #### Automated
 
-- [ ] 2.1 INFO routing unit test passes: returns `{'email': False, 'slack': False}`
-- [ ] 2.2 WARNING threshold unit tests pass (consecutive_fails=2 skip, consecutive_fails=3 send)
-- [ ] 2.3 CRITICAL unchanged unit test passes
-- [ ] 2.4 Counter increment/reset unit tests pass
-- [ ] 2.5 Full test suite passes: `python manage.py test monitor`
+- [x] 2.1 INFO routing unit test passes: returns `{'email': False, 'slack': False}`
+- [x] 2.2 WARNING threshold unit tests pass (consecutive_fails=2 skip, consecutive_fails=3 send)
+- [x] 2.3 CRITICAL unchanged unit test passes
+- [x] 2.4 Counter increment/reset unit tests pass
+- [x] 2.5 Full test suite passes: `python manage.py test monitor`
 
 #### Manual
 
@@ -462,9 +462,9 @@ Add unit tests covering the three notification-routing branches in `notify_rule_
 
 #### Automated
 
-- [ ] 3.1 CSS variables `--info` and `--info-dim` present in `templates/base.html`
-- [ ] 3.2 `dp-badge-severity-critical/warning/info` classes present in `templates/base.html`
-- [ ] 3.3 Template renders without error: `python manage.py test monitor`
+- [x] 3.1 CSS variables `--info` and `--info-dim` present in `templates/base.html`
+- [x] 3.2 `dp-badge-severity-critical/warning/info` classes present in `templates/base.html`
+- [x] 3.3 Template renders without error: `python manage.py test monitor`
 
 #### Manual
 
@@ -475,8 +475,8 @@ Add unit tests covering the three notification-routing branches in `notify_rule_
 
 #### Automated
 
-- [ ] 4.1 `severity` present in `RuleForm().fields`
-- [ ] 4.2 Full test suite passes: `python manage.py test monitor`
+- [x] 4.1 `severity` present in `RuleForm().fields`
+- [x] 4.2 Full test suite passes: `python manage.py test monitor`
 
 #### Manual
 
@@ -487,6 +487,6 @@ Add unit tests covering the three notification-routing branches in `notify_rule_
 
 #### Automated
 
-- [ ] 5.1 All 8 new test cases pass: `python manage.py test monitor.tests.test_rule_severity`
-- [ ] 5.2 Full test suite passes: `python manage.py test monitor`
-- [ ] 5.3 No import errors in test module
+- [x] 5.1 All 8 new test cases pass: `python manage.py test monitor.tests.RuleSeverity*`
+- [x] 5.2 Full test suite passes: `python manage.py test monitor`
+- [x] 5.3 No import errors in test module

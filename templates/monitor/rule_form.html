@@ -395,6 +395,26 @@
       {% endif %}
     </div>
 
+    <!-- ── Tags ── -->
+    <div class="form-section-label">Tags <span class="optional-tag">optional</span></div>
+    <div class="mb-4" id="tags-field-group">
+      <div id="tag-chip-container" style="
+        display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+        border:1px solid var(--border); border-radius:6px;
+        padding:6px 8px; background:var(--bg-elevated); min-height:38px;
+        cursor:text;" onclick="document.getElementById('tag-input').focus()">
+        <!-- chips inserted here by JS -->
+        <input type="text" id="tag-input" placeholder="Add tag…" autocomplete="off"
+          style="border:none;outline:none;background:transparent;
+                 font-size:0.85rem;color:var(--text-primary);flex:1;min-width:80px;">
+      </div>
+      <input type="hidden" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}">
+      <div class="form-text">Up to 5 tags. Letters, digits, hyphens. Press Enter or comma to add.</div>
+      {% if form.tags.errors %}
+        <div class="invalid-feedback d-block">{{ form.tags.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+
     <div class="d-flex gap-2 pt-2" style="border-top:1px solid var(--border)">
       <button type="submit" class="btn-dp btn-dp-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -407,6 +427,75 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+// Tag chip widget
+(function() {
+  const container = document.getElementById('tag-chip-container');
+  const input     = document.getElementById('tag-input');
+  const hidden    = document.getElementById('id_tags');
+  if (!container || !input || !hidden) return;
+  const MAX_TAGS  = 5;
+  const MAX_LEN   = 30;
+  const VALID     = /^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$/;
+
+  let tags = hidden.value ? hidden.value.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  function renderChips() {
+    container.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    tags.forEach((tag, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip cond-pill';
+      chip.style.cssText = 'color:var(--accent-hover);border-color:rgba(99,102,241,0.25);background:var(--accent-dim);cursor:default';
+      chip.innerHTML = tag + ' <span style="cursor:pointer;margin-left:2px" data-i="' + i + '">✕</span>';
+      chip.querySelector('span').addEventListener('click', function() {
+        tags.splice(parseInt(this.dataset.i), 1);
+        renderChips();
+        syncHidden();
+      });
+      container.insertBefore(chip, input);
+    });
+    input.placeholder = tags.length >= MAX_TAGS ? '' : 'Add tag…';
+    input.disabled = tags.length >= MAX_TAGS;
+  }
+
+  function syncHidden() {
+    hidden.value = tags.join(',');
+  }
+
+  function addTag(raw) {
+    const tag = raw.trim().toLowerCase();
+    if (!tag) return;
+    if (tags.length >= MAX_TAGS) return;
+    if (tag.length > MAX_LEN) { input.style.borderBottom = '2px solid var(--error)'; return; }
+    if (!VALID.test(tag)) { input.style.borderBottom = '2px solid var(--error)'; return; }
+    if (tags.includes(tag)) { input.value = ''; return; }
+    input.style.borderBottom = '';
+    tags.push(tag);
+    input.value = '';
+    renderChips();
+    syncHidden();
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(this.value);
+    }
+    if (e.key === 'Backspace' && this.value === '' && tags.length) {
+      tags.pop();
+      renderChips();
+      syncHidden();
+    }
+  });
+
+  input.addEventListener('blur', function() {
+    if (this.value.trim()) addTag(this.value);
+  });
+
+  renderChips();
+}());
+</script>
+
 <script>
 // S-06: Rule type toggle
 (function() {

@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .check_templates import TEMPLATES as CHECK_TEMPLATES
 from .models import ApiKey, CheckRun, Connection, DbtIntegration, Rule, RuleResult, SlackWebhook, UserProfile
 from .schedule_utils import get_next_run, get_schedule_label
-from .services import get_schema_columns, get_schema_tables, run_all_checks, run_checks_for_user, run_single_rule
+from .services import get_schema_columns, get_schema_tables, preview_rule, run_all_checks, run_checks_for_user, run_single_rule
 
 
 # ── Authentication ──────────────────────────────────────────
@@ -141,6 +141,76 @@ def rule_delete(request, rule_id):
         messages.success(request, f'Rule "{name}" deleted.')
         return redirect('monitor:dashboard')
     return render(request, 'monitor/rule_confirm_delete.html', {'rule': rule})
+
+
+@login_required
+@require_POST
+def rule_clone(request, rule_id):
+    rule = get_object_or_404(Rule, pk=rule_id, user=request.user)
+    rule.pk = None
+    rule._state.adding = True
+    rule.name = 'Copy of ' + rule.name[:190]
+    rule.schedule_type = 'disabled'
+    rule.schedule_cron = ''
+    rule.last_notified_at = None
+    rule.last_slack_notified_at = None
+    rule.user = request.user
+    rule.save()
+    messages.success(request, f'Rule "{rule.name}" cloned.')
+    return redirect('monitor:rule_edit', rule.pk)
+
+
+@login_required
+@require_POST
+def preview_rule_view(request):
+    """AJAX: preview a rule against a connection without saving anything.
+
+    POST /api/preview/
+    Body (JSON): {connection_id, rule_type?, schema_name?, table_name?,
+                  custom_sql?, min_row_count?, timestamp_column?, max_age_hours?}
+    Returns: {status, row_count, last_record_age_hours, error_message, sample_rows}
+    """
+    try:
+        body = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    connection_id_raw = body.get('connection_id')
+    if connection_id_raw is None:
+        return JsonResponse({'error': 'connection_id required'}, status=400)
+    try:
+        connection_id = int(connection_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'connection_id must be an integer'}, status=400)
+
+    # Cast optional integer fields
+    min_row_count = body.get('min_row_count')
+    if min_row_count is not None:
+        try:
+            min_row_count = int(min_row_count)
+        except (TypeError, ValueError):
+            min_row_count = None
+
+    max_age_hours = body.get('max_age_hours')
+    if max_age_hours is not None:
+        try:
+            max_age_hours = int(max_age_hours)
+        except (TypeError, ValueError):
+            max_age_hours = None
+
+    params = {
+        'connection_id': connection_id,
+        'rule_type': body.get('rule_type', 'volume_freshness'),
+        'schema_name': body.get('schema_name', ''),
+        'table_name': body.get('table_name', ''),
+        'custom_sql': body.get('custom_sql', ''),
+        'min_row_count': min_row_count,
+        'timestamp_column': body.get('timestamp_column', ''),
+        'max_age_hours': max_age_hours,
+    }
+
+    result = preview_rule(params, request.user)
+    return JsonResponse(result)
 
 
 # ── Schema introspection (S-04) ─────────────────────────────

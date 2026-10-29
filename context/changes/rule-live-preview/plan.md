@@ -398,8 +398,8 @@ No schema migrations required. The preview endpoint is purely in-memory; it does
 
 #### Automated
 
-- [ ] 1.1 preview_rule service unit tests pass
-- [ ] 1.2 python manage.py check passes
+- [x] 1.1 preview_rule service unit tests pass
+- [x] 1.2 python manage.py check passes
 
 #### Manual
 
@@ -409,8 +409,8 @@ No schema migrations required. The preview endpoint is purely in-memory; it does
 
 #### Automated
 
-- [ ] 2.1 preview_rule_view tests pass
-- [ ] 2.2 python manage.py check passes
+- [x] 2.1 preview_rule_view tests pass
+- [x] 2.2 python manage.py check passes
 
 #### Manual
 
@@ -422,7 +422,7 @@ No schema migrations required. The preview endpoint is purely in-memory; it does
 
 #### Automated
 
-- [ ] 3.1 python manage.py check passes
+- [x] 3.1 python manage.py check passes
 
 #### Manual
 
@@ -436,6 +436,6 @@ No schema migrations required. The preview endpoint is purely in-memory; it does
 
 #### Automated
 
-- [ ] 4.1 PreviewRuleServiceTest all pass
-- [ ] 4.2 PreviewRuleViewTest all pass
-- [ ] 4.3 Full monitor test suite — no regressions
+- [x] 4.1 PreviewRuleServiceTest all pass
+- [x] 4.2 PreviewRuleViewTest all pass
+- [x] 4.3 Full monitor test suite — no regressions

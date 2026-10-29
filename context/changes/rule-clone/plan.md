@@ -222,8 +222,8 @@ No model changes. No migration needed.
 
 #### Automated
 
-- [ ] 1.1 `python manage.py check` passes with no errors
-- [ ] 1.2 Existing test suite passes: `python manage.py test monitor`
+- [x] 1.1 `python manage.py check` passes with no errors
+- [x] 1.2 Existing test suite passes: `python manage.py test monitor`
 
 #### Manual
 
@@ -236,7 +236,7 @@ No model changes. No migration needed.
 
 #### Automated
 
-- [ ] 2.1 `python manage.py test monitor` passes
+- [x] 2.1 `python manage.py test monitor` passes
 
 #### Manual
 
@@ -248,8 +248,8 @@ No model changes. No migration needed.
 
 #### Automated
 
-- [ ] 3.1 All new tests pass: `python manage.py test monitor.tests.RuleCloneViewTest`
-- [ ] 3.2 Full test suite passes: `python manage.py test monitor`
+- [x] 3.1 All new tests pass: `python manage.py test monitor.tests.RuleCloneViewTest`
+- [x] 3.2 Full test suite passes: `python manage.py test monitor`
 
 #### Manual
 
