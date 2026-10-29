@@ -456,3 +456,29 @@ Slack webhooks, check templates, REST API, alert digest, sparklines, row samplin
 - ML anomaly detection (M-07)
 - Data contracts (M-07)
 - Cross-table consistency (M-06)
+
+---
+---
+milestone_seq: 6
+milestone_id: m-06-rule-builder-ux
+milestone_status: open
+main_goal: ux
+north_star: S-30
+top_blocker: rule-wizard
+---
+
+## Milestone
+
+**M-06 — Rule Builder UX: Wizard, Preview, Tags, Severity, Clone**
+
+Status: open
+Źródło: sesja robocza 2026-10-28
+
+| ID | Slice | Prereqs | Status |
+|---|---|---|---|
+| S-25 | Live preview — test rule before saving | — | new |
+| S-26 | Rule description field | — | new |
+| S-27 | Rule severity — critical/warning/info | — | new |
+| S-28 | Rule tags — filter and group | — | new |
+| S-29 | Clone rule — duplicate with one click | — | new |
+| S-30 | Rule wizard — 3-step form ⭐ | S-25,S-26,S-27,S-28 | new |
