@@ -14,7 +14,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .check_templates import TEMPLATES as CHECK_TEMPLATES
 from .models import ApiKey, CheckRun, Connection, DbtIntegration, Rule, RuleResult, SlackWebhook, UserProfile
-from .schedule_utils import get_next_run
+from .schedule_utils import get_next_run, get_schedule_label
 from .services import get_schema_columns, get_schema_tables, run_all_checks, run_checks_for_user, run_single_rule
 
 
@@ -55,7 +55,12 @@ def dashboard(request):
             error_count += 1
         else:
             never_count += 1
-        rule_status.append({'rule': rule, 'result': last_result, 'status': status})
+        rule_status.append({
+            'rule': rule,
+            'result': last_result,
+            'status': status,
+            'schedule_label': get_schedule_label(rule),
+        })
 
     return render(request, 'monitor/dashboard.html', {
         'rule_status': rule_status,
