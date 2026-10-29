@@ -554,21 +554,70 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinning { animation: spin 0.8s linear infinite; display: inline-block; }
 
+    /* ═══ OVERLAY ════════════════════════════════════════════════ */
+    .dp-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 99;
+    }
+    .dp-overlay.active { display: block; }
+
+    /* Burger hidden on desktop */
+    .dp-burger { display: none; }
+
     /* ═══ MOBILE ═════════════════════════════════════════════════ */
     @media (max-width: 767px) {
-      .dp-sidebar { width: var(--nav-collapsed); }
+      /* Sidebar slides off-screen */
+      .dp-sidebar {
+        transform: translateX(-100%);
+        transition: transform var(--nav-transition);
+        width: var(--nav-width);
+        z-index: 200;
+      }
+      .dp-sidebar.mobile-open {
+        transform: translateX(0);
+      }
+      /* Restore labels that desktop collapse might hide */
       .dp-sidebar .dp-logo-name,
       .dp-sidebar .dp-nav-label,
       .dp-sidebar .dp-nav-section,
       .dp-sidebar .dp-user-info,
-      .dp-sidebar .dp-toggle-label { opacity: 0; width: 0; overflow: hidden; }
-      .dp-sidebar .dp-toggle-icon { transform: rotate(180deg); }
-      .dp-main { margin-left: var(--nav-collapsed); }
+      .dp-sidebar .dp-toggle-label { opacity: 1; width: auto; overflow: visible; }
+      .dp-sidebar .dp-toggle-icon { transform: none; }
+
+      /* Main takes full width */
+      .dp-main { margin-left: 0; }
+
+      /* Hamburger visible on mobile */
+      .dp-burger {
+        display: flex; align-items: center; justify-content: center;
+        min-height: 44px; min-width: 44px;
+        background: transparent; border: 1px solid var(--border-strong);
+        border-radius: var(--radius); color: var(--text-secondary);
+        cursor: pointer; flex-shrink: 0;
+      }
+
+      /* Table scrolling */
+      .dp-panel { overflow-x: auto; }
+
+      /* KPI 2-column grid */
+      .dp-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+      /* Touch targets */
+      .btn-dp { min-height: 44px; }
+
+      /* Row actions always visible on touch */
+      .dp-row-actions { opacity: 1 !important; }
+
+      /* Reduce content padding */
+      .dp-content { padding: 12px; }
     }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body id="dp-body">
+
+  <!-- Mobile sidebar overlay -->
+  <div class="dp-overlay" id="dp-overlay"></div>
 
   <!-- Ambient orbs -->
   <div class="orb o1"></div>
@@ -740,6 +789,9 @@
 
     <!-- Top bar -->
     <header class="dp-topbar">
+      <button class="dp-burger" id="dp-burger" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 4h14M2 9h14M2 14h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
       <div class="dp-breadcrumb">
         <span>DataPulse</span>
         {% block breadcrumb %}{% endblock %}
@@ -791,6 +843,20 @@
     btn.addEventListener('click', () => {
       setCollapsed(!body.classList.contains('nav-collapsed'));
     });
+
+    // Mobile burger/overlay
+    const burger = document.getElementById('dp-burger');
+    const overlay = document.getElementById('dp-overlay');
+    if (burger) {
+      burger.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
+      });
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+      });
+    }
 
     // Run button loading state
     document.querySelectorAll('form[data-run-form]').forEach(form => {
