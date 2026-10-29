@@ -743,7 +743,7 @@ class RuleCRUDViewTest(TestCase):
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'new_rule', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 50, 'rule_type': 'volume_freshness',
-            'connection': conn.pk,
+            'connection': conn.pk, 'severity': 'critical',
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         self.assertTrue(Rule.objects.filter(name='new_rule').exists())
@@ -753,7 +753,7 @@ class RuleCRUDViewTest(TestCase):
         r = self.client.post(reverse('monitor:rule_create'), {
             'name': 'sql_rule', 'rule_type': 'custom_sql',
             'custom_sql': 'SELECT true',
-            'connection': conn.pk,
+            'connection': conn.pk, 'severity': 'critical',
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         rule = Rule.objects.get(name='sql_rule')
@@ -779,7 +779,7 @@ class RuleCRUDViewTest(TestCase):
         r = self.client.post(reverse('monitor:rule_edit', args=[rule.pk]), {
             'name': 'new_name', 'schema_name': 'public', 'table_name': 'orders',
             'min_row_count': 100, 'rule_type': 'volume_freshness',
-            'connection': conn.pk,
+            'connection': conn.pk, 'severity': 'critical',
         })
         self.assertRedirects(r, reverse('monitor:dashboard'))
         rule.refresh_from_db()
@@ -4389,3 +4389,50 @@ class RuleTagsDashboardTests(TestCase):
         content = r.content.decode()
         # The untagged rule row should have data-tags="" (empty)
         self.assertIn('data-tags=""', content)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Rule Wizard — Phase 5 Tests
+# ═══════════════════════════════════════════════════════════════════
+
+class RuleWizardUITest(TestCase):
+    """Verify the rule_create page includes wizard markup and the edit page does not."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('wizard_ui_user', password='pass')
+        self.client.force_login(self.user)
+        self.conn = make_connection(user=self.user)
+
+    def test_rule_create_has_wizard_steps(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertEqual(r.status_code, 200)
+        content = r.content.decode()
+        self.assertGreaterEqual(content.count('wizard-step'), 3)
+
+    def test_rule_create_has_wizard_progress(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertContains(r, 'wizard-progress')
+
+    def test_rule_create_has_next_button(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertContains(r, 'wizard-next-btn')
+
+    def test_rule_create_has_session_storage_js(self):
+        r = self.client.get(reverse('monitor:rule_create'))
+        self.assertContains(r, 'sessionStorage')
+        self.assertContains(r, 'dp_wiz_rule_create')
+
+    def test_rule_edit_has_no_wizard(self):
+        rule = make_rule(min_rows=1, connection=self.conn, user=self.user)
+        r = self.client.get(reverse('monitor:rule_edit', args=[rule.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'wizard-step')
+
+    def test_rule_create_post_still_works(self):
+        r = self.client.post(reverse('monitor:rule_create'), {
+            'name': 'wiz_rule', 'schema_name': 'public', 'table_name': 'orders',
+            'min_row_count': 10, 'rule_type': 'volume_freshness',
+            'connection': self.conn.pk, 'severity': 'critical',
+        })
+        self.assertRedirects(r, reverse('monitor:dashboard'))
+        self.assertTrue(Rule.objects.filter(name='wiz_rule').exists())

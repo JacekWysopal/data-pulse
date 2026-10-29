@@ -436,9 +436,9 @@ No model migrations. No server-side state changes. `rule_edit` is unaffected.
 
 #### Automated
 
-- [ ] 1.1 GET /rules/new/ returns HTTP 200
-- [ ] 1.2 GET /rules/<rule_id>/edit/ returns HTTP 200
-- [ ] 1.3 Django check passes
+- [x] 1.1 GET /rules/new/ returns HTTP 200
+- [x] 1.2 GET /rules/<rule_id>/edit/ returns HTTP 200
+- [x] 1.3 Django check passes
 
 #### Manual
 
@@ -449,8 +449,8 @@ No model migrations. No server-side state changes. `rule_edit` is unaffected.
 
 #### Automated
 
-- [ ] 2.1 GET /rules/new/ response contains wizard-progress
-- [ ] 2.2 GET /rules/new/ response contains wizard-step-ind
+- [x] 2.1 GET /rules/new/ response contains wizard-progress
+- [x] 2.2 GET /rules/new/ response contains wizard-step-ind
 
 #### Manual
 
@@ -461,9 +461,9 @@ No model migrations. No server-side state changes. `rule_edit` is unaffected.
 
 #### Automated
 
-- [ ] 3.1 GET /rules/new/ response contains wizard-next-btn
-- [ ] 3.2 GET /rules/new/ response contains sessionStorage
-- [ ] 3.3 GET /rules/new/ response contains dp_wiz_rule_create
+- [x] 3.1 GET /rules/new/ response contains wizard-next-btn
+- [x] 3.2 GET /rules/new/ response contains sessionStorage
+- [x] 3.3 GET /rules/new/ response contains dp_wiz_rule_create
 
 #### Manual
 
@@ -476,7 +476,7 @@ No model migrations. No server-side state changes. `rule_edit` is unaffected.
 
 #### Automated
 
-- [ ] 4.1 GET /rules/new/ response contains validateStep
+- [x] 4.1 GET /rules/new/ response contains validateStep
 
 #### Manual
 
@@ -489,5 +489,9 @@ No model migrations. No server-side state changes. `rule_edit` is unaffected.
 
 #### Automated
 
-- [ ] 5.1 RuleWizardUITest — all 6 tests pass
-- [ ] 5.2 RuleCRUDViewTest — existing tests unaffected
+- [x] 5.1 RuleWizardUITest — all 6 tests pass
+- [x] 5.2 RuleCRUDViewTest — existing tests unaffected
+
+#### Manual
+
+(none)
