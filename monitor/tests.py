@@ -1530,6 +1530,97 @@ class PerUserIsolationTest(TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  IDOR isolation tests (targeted)
+# ═══════════════════════════════════════════════════════════════════
+
+class UserIsolationTest(TestCase):
+    """Targeted IDOR isolation tests — four specific vectors."""
+
+    def setUp(self):
+        import hashlib as _hl
+        from .models import ApiKey
+
+        self.user_a = User.objects.create_user('iso_user_a', password='pass')
+        self.user_b = User.objects.create_user('iso_user_b', password='pass')
+
+        # User B has a rule and a CheckRun with results
+        self.b_rule = make_rule(name='b_iso_rule', min_rows=1, user=self.user_b)
+        self.b_run = CheckRun.objects.create(finished_at=timezone.now())
+        RuleResult.objects.create(
+            run=self.b_run, rule=self.b_rule, status='OK', row_count=10
+        )
+
+        # API key for user A
+        raw = 'iso_test_raw_key_a'
+        key_hash = _hl.sha256(raw.encode()).hexdigest()
+        ApiKey.objects.create(user=self.user_a, name='iso key a', key_hash=key_hash)
+        self.api_raw_a = raw
+
+    def _api_auth(self):
+        return f'Bearer {self.api_raw_a}'
+
+    # ── 1. dashboard last_run must not leak user B's CheckRun ──────
+
+    def test_last_run_not_leaked(self):
+        """User A sees no last_run when they have no rules/runs of their own."""
+        self.client.login(username='iso_user_a', password='pass')
+        r = self.client.get(reverse('monitor:dashboard'))
+        self.assertEqual(r.status_code, 200)
+        # User A has no rules; last_run must be None, not user B's run
+        self.assertIsNone(
+            r.context['last_run'],
+            msg='last_run leaked a CheckRun belonging to another user',
+        )
+
+    # ── 2. API /api/v1/rules returns only user's own rules ─────────
+
+    def test_api_rules_filtered(self):
+        """GET /api/v1/rules returns only user A's rules, not user B's."""
+        a_rule = make_rule(name='a_iso_rule', min_rows=1, user=self.user_a)
+        r = self.client.get('/api/v1/rules', HTTP_AUTHORIZATION=self._api_auth())
+        self.assertEqual(r.status_code, 200)
+        data = json.loads(r.content)
+        names = [rule['name'] for rule in data['rules']]
+        self.assertIn('a_iso_rule', names)
+        self.assertNotIn('b_iso_rule', names)
+
+    # ── 3. run_single requires ownership ──────────────────────────
+
+    def test_run_single_requires_ownership(self):
+        """User A cannot trigger a run for user B's rule — must get 404."""
+        self.client.login(username='iso_user_a', password='pass')
+        r = self.client.post(
+            reverse('monitor:run_single', args=[self.b_rule.pk])
+        )
+        self.assertEqual(
+            r.status_code, 404,
+            msg='run_single must return 404 for rules owned by another user',
+        )
+
+    # ── 4. schedule_dashboard shows only user's scheduled rules ───
+
+    def test_schedule_dashboard_filtered(self):
+        """Schedule dashboard shows only user A's scheduled rules, not user B's."""
+        # Give user B a scheduled rule
+        b_sched_rule = make_rule(name='b_sched_rule', min_rows=1, user=self.user_b)
+        b_sched_rule.schedule_type = 'preset_1x'
+        b_sched_rule.save()
+
+        # Give user A a scheduled rule
+        a_sched_rule = make_rule(name='a_sched_rule', min_rows=1, user=self.user_a)
+        a_sched_rule.schedule_type = 'preset_1x'
+        a_sched_rule.save()
+
+        self.client.login(username='iso_user_a', password='pass')
+        r = self.client.get(reverse('monitor:schedule_dashboard'))
+        self.assertEqual(r.status_code, 200)
+        rule_rows = r.context['rule_rows']
+        rule_pks = {row['rule'].pk for row in rule_rows}
+        self.assertIn(a_sched_rule.pk, rule_pks)
+        self.assertNotIn(b_sched_rule.pk, rule_pks)
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  Email notifications (S-13)
 # ═══════════════════════════════════════════════════════════════════
 
